@@ -43,6 +43,17 @@ function normalizeShowPayload(raw) {
   }
 }
 
+function slugify(input) {
+  return String(input || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 220)
+}
+
 export default function ListingTabbedForm(props) {
   const { action, record: initialRecord, resource } = props
   const sendNotice = useNotice()
@@ -54,6 +65,7 @@ export default function ListingTabbedForm(props) {
   const [galleryImages, setGalleryImages] = useState([]) // { image_path, sort_order, publicUrl? }
   const [isUploading, setIsUploading] = useState(false)
   const [bannerUploading, setBannerUploading] = useState(false)
+  const [slugTouched, setSlugTouched] = useState(false)
 
   const [record, setRecord] = useState(() => buildRecordState(initialRecord))
   const [activeTab, setActiveTab] = useState('listing')
@@ -76,8 +88,26 @@ export default function ListingTabbedForm(props) {
   const recordSyncKey = `${action?.name ?? ''}:${initialRecord?.id != null ? String(initialRecord.id) : 'new'}`
   useEffect(() => {
     setRecord(buildRecordState(initialRecord))
+    setSlugTouched(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `initialRecord` is a new object every render; `recordSyncKey` is the stable identity
   }, [recordSyncKey])
+
+  const handleListingFieldChange = useCallback(
+    (propertyOrRecord, value, selectedRecord) => {
+      if (typeof propertyOrRecord === 'string') {
+        if (propertyOrRecord === 'slug') {
+          setSlugTouched(true)
+        }
+        if (propertyOrRecord === 'title' && !slugTouched) {
+          const nextSlug = slugify(value)
+          setRecord((prev) => updateRecord('slug', nextSlug)(updateRecord('title', value, selectedRecord)(prev)))
+          return
+        }
+      }
+      handlePropertyChange(propertyOrRecord, value, selectedRecord)
+    },
+    [handlePropertyChange, slugTouched]
+  )
 
   const listingProperties = useMemo(() => {
     let all = resource?.editProperties
@@ -90,7 +120,11 @@ export default function ListingTabbedForm(props) {
         p &&
         p.propertyPath !== 'shows_payload' &&
         p.propertyPath !== 'banner_image' &&
-        p.propertyPath !== 'trailer_url'
+        p.propertyPath !== 'trailer_url' &&
+        p.propertyPath !== 'created_at' &&
+        p.propertyPath !== 'updated_at' &&
+        p.propertyPath !== 'created_by_admin_id' &&
+        p.propertyPath !== 'updated_by_admin_id'
     )
   }, [resource])
 
@@ -406,7 +440,7 @@ export default function ListingTabbedForm(props) {
               property={property}
               resource={resource}
               record={record}
-              onChange={handlePropertyChange}
+              onChange={handleListingFieldChange}
             />
           ))}
         </Box>

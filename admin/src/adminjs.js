@@ -61,6 +61,64 @@ export async function buildAdminJs() {
     if (request.fields) delete request.fields.gallery_payload
   }
 
+  function mysqlNow() {
+    // YYYY-MM-DD HH:mm:ss in UTC
+    return new Date().toISOString().slice(0, 19).replace('T', ' ')
+  }
+
+  /** Ensure created_at/updated_at get sensible values on create/edit. */
+  function ensureListingTimestamps(request, { isNew }) {
+    if (!request) return
+    const now = mysqlNow()
+
+    const payload = request.payload && typeof request.payload === 'object' ? request.payload : null
+    const fields = request.fields && typeof request.fields === 'object' ? request.fields : null
+
+    const setIfMissing = (obj, key, value) => {
+      if (!obj) return
+      if (!(key in obj) || obj[key] === '' || obj[key] === null || typeof obj[key] === 'undefined') {
+        obj[key] = value
+      }
+    }
+
+    if (isNew) {
+      setIfMissing(payload, 'created_at', now)
+      setIfMissing(fields, 'created_at', now)
+    }
+    setIfMissing(payload, 'updated_at', now)
+    setIfMissing(fields, 'updated_at', now)
+  }
+
+  function ensureListingAuditAdmins(request, context, { isNew }) {
+    const adminId = context?.currentAdmin?.id
+    if (!adminId) return
+
+    const payload = request?.payload && typeof request.payload === 'object' ? request.payload : null
+    const fields = request?.fields && typeof request.fields === 'object' ? request.fields : null
+
+    const setIfMissing = (obj, key, value) => {
+      if (!obj) return
+      if (!(key in obj) || obj[key] === '' || obj[key] === null || typeof obj[key] === 'undefined') {
+        obj[key] = value
+      }
+    }
+
+    if (isNew) {
+      setIfMissing(payload, 'created_by_admin_id', adminId)
+      setIfMissing(fields, 'created_by_admin_id', adminId)
+    }
+    if (payload) payload.updated_by_admin_id = adminId
+    if (fields) fields.updated_by_admin_id = adminId
+  }
+
+  function hideAuditProperties(extra = {}) {
+    return {
+      created_at: { isVisible: false },
+      updated_at: { isVisible: false },
+      ...extra,
+    }
+  }
+
   async function upsertListingGallery({ listingId, images }) {
     const pool = dbPool()
     const conn = await pool.getConnection()
@@ -174,6 +232,8 @@ export async function buildAdminJs() {
           navigation: { name: 'Admin', icon: 'User' },
           properties: {
             password_hash: { isVisible: false },
+            created_at: { isVisible: false },
+            updated_at: { isVisible: false },
           },
           actions: {
             new: { isAccessible: ({ currentAdmin }) => currentAdmin?.role === 'main_admin' },
@@ -186,6 +246,7 @@ export async function buildAdminJs() {
         resource: db.table('admin_roles'),
         options: {
           navigation: { name: 'Admin', icon: 'Settings' },
+          properties: { created_at: { isVisible: false }, updated_at: { isVisible: false } },
           actions: {
             new: { isAccessible: ({ currentAdmin }) => currentAdmin?.role === 'main_admin' },
             edit: { isAccessible: ({ currentAdmin }) => currentAdmin?.role === 'main_admin' },
@@ -197,6 +258,7 @@ export async function buildAdminJs() {
         resource: db.table('admin_role_permissions'),
         options: {
           navigation: { name: 'Admin', icon: 'Settings' },
+          properties: { created_at: { isVisible: false }, updated_at: { isVisible: false } },
           actions: {
             new: { isAccessible: ({ currentAdmin }) => currentAdmin?.role === 'main_admin' },
             edit: { isAccessible: ({ currentAdmin }) => currentAdmin?.role === 'main_admin' },
@@ -211,12 +273,14 @@ export async function buildAdminJs() {
           properties: {
             password_hash: { isVisible: false },
             is_blocked: { type: 'boolean' },
+            created_at: { isVisible: false },
+            updated_at: { isVisible: false },
           },
         },
       },
       {
         resource: db.table('types'),
-        options: { navigation: { name: 'Content', icon: 'Catalog' } },
+        options: { navigation: { name: 'Content', icon: 'Catalog' }, properties: { created_at: { isVisible: false }, updated_at: { isVisible: false } } },
       },
       {
         resource: db.table('listings'),
@@ -224,6 +288,10 @@ export async function buildAdminJs() {
           navigation: { name: 'Content', icon: 'Movie' },
           listProperties: ['banner_image', 'title', 'slug', 'type_id', 'status', 'publish_at', 'unpublish_at'],
           properties: {
+            created_at: { isVisible: false },
+            updated_at: { isVisible: false },
+            created_by_admin_id: { isVisible: false, reference: 'admins' },
+            updated_by_admin_id: { isVisible: false, reference: 'admins' },
             type_id: { reference: 'types' },
             description_html: { type: 'textarea', props: { rows: 12 } },
             banner_image: {
@@ -237,7 +305,9 @@ export async function buildAdminJs() {
           actions: {
             new: {
               component: Components.ListingTabbedForm,
-              before: async (request) => {
+              before: async (request, context) => {
+                ensureListingTimestamps(request, { isNew: true })
+                ensureListingAuditAdmins(request, context, { isNew: true })
                 stashListingShowsPayload(request)
                 stashListingGalleryPayload(request)
                 return request
@@ -270,7 +340,9 @@ export async function buildAdminJs() {
             },
             edit: {
               component: Components.ListingTabbedForm,
-              before: async (request) => {
+              before: async (request, context) => {
+                ensureListingTimestamps(request, { isNew: false })
+                ensureListingAuditAdmins(request, context, { isNew: false })
                 stashListingShowsPayload(request)
                 stashListingGalleryPayload(request)
                 return request
@@ -316,15 +388,19 @@ export async function buildAdminJs() {
                 show: Components.ImageThumb,
               },
             },
+            created_at: { isVisible: false },
           },
         },
       },
-      { resource: db.table('listing_related'), options: { navigation: { name: 'Content', icon: 'Link' } } },
+      {
+        resource: db.table('listing_related'),
+        options: { navigation: { name: 'Content', icon: 'Link' }, properties: { created_at: { isVisible: false } } },
+      },
 
-      { resource: db.table('countries'), options: { navigation: { name: 'Locations', icon: 'Map' } } },
-      { resource: db.table('states'), options: { navigation: { name: 'Locations', icon: 'Map' } } },
-      { resource: db.table('cities'), options: { navigation: { name: 'Locations', icon: 'Map' } } },
-      { resource: db.table('places'), options: { navigation: { name: 'Locations', icon: 'Pin' } } },
+      { resource: db.table('countries'), options: { navigation: { name: 'Locations', icon: 'Map' }, properties: { created_at: { isVisible: false }, updated_at: { isVisible: false } } } },
+      { resource: db.table('states'), options: { navigation: { name: 'Locations', icon: 'Map' }, properties: { created_at: { isVisible: false }, updated_at: { isVisible: false } } } },
+      { resource: db.table('cities'), options: { navigation: { name: 'Locations', icon: 'Map' }, properties: { created_at: { isVisible: false }, updated_at: { isVisible: false } } } },
+      { resource: db.table('places'), options: { navigation: { name: 'Locations', icon: 'Pin' }, properties: { created_at: { isVisible: false }, updated_at: { isVisible: false } } } },
 
       {
         resource: db.table('shows'),
@@ -333,6 +409,8 @@ export async function buildAdminJs() {
           properties: {
             listing_id: { reference: 'listings' },
             place_id: { reference: 'places' },
+            created_at: { isVisible: false },
+            updated_at: { isVisible: false },
           },
           actions: { list: { isVisible: false }, show: { isVisible: false }, new: { isVisible: false }, edit: { isVisible: false }, delete: { isVisible: false } },
         },
@@ -343,18 +421,19 @@ export async function buildAdminJs() {
           navigation: null,
           properties: {
             show_id: { reference: 'shows' },
+            created_at: { isVisible: false },
           },
           actions: { list: { isVisible: false }, show: { isVisible: false }, new: { isVisible: false }, edit: { isVisible: false }, delete: { isVisible: false } },
         },
       },
 
-      { resource: db.table('comments'), options: { navigation: { name: 'Moderation', icon: 'Chat' } } },
-      { resource: db.table('ratings'), options: { navigation: { name: 'Moderation', icon: 'Star' } } },
+      { resource: db.table('comments'), options: { navigation: { name: 'Moderation', icon: 'Chat' }, properties: { created_at: { isVisible: false }, updated_at: { isVisible: false } } } },
+      { resource: db.table('ratings'), options: { navigation: { name: 'Moderation', icon: 'Star' }, properties: { created_at: { isVisible: false }, updated_at: { isVisible: false } } } },
 
-      { resource: db.table('login_events'), options: { navigation: { name: 'Analytics', icon: 'Activity' } } },
-      { resource: db.table('page_visits'), options: { navigation: { name: 'Analytics', icon: 'Activity' } } },
-      { resource: db.table('booking_clicks'), options: { navigation: { name: 'Analytics', icon: 'Activity' } } },
-      { resource: db.table('refresh_tokens'), options: { navigation: { name: 'Auth', icon: 'Locked' } } },
+      { resource: db.table('login_events'), options: { navigation: { name: 'Analytics', icon: 'Activity' }, properties: { created_at: { isVisible: false } } } },
+      { resource: db.table('page_visits'), options: { navigation: { name: 'Analytics', icon: 'Activity' }, properties: { created_at: { isVisible: false } } } },
+      { resource: db.table('booking_clicks'), options: { navigation: { name: 'Analytics', icon: 'Activity' }, properties: { created_at: { isVisible: false } } } },
+      { resource: db.table('refresh_tokens'), options: { navigation: { name: 'Auth', icon: 'Locked' }, properties: { created_at: { isVisible: false } } } },
     ],
   })
 
