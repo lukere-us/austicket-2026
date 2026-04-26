@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import ReactQuill from 'react-quill'
 import {
   ApiClient,
   BasePropertyComponent,
@@ -7,6 +8,24 @@ import {
   useNotice,
 } from 'adminjs'
 import { Box, Button, DatePicker, H2, Input, Label, Select, Text, TextArea } from '@adminjs/design-system'
+
+function makeClientKey() {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+}
+
+function makeEmptyShow() {
+  return {
+    __key: makeClientKey(),
+    place_id: '',
+    start_date: '',
+    end_date: '',
+    publish_at: '',
+    unpublish_at: '',
+    booking_url: '',
+    ticket_cost: '',
+    times: [{ show_time: '', notes: '' }],
+  }
+}
 
 function buildRecordState(initial) {
   if (!initial) {
@@ -27,19 +46,37 @@ function buildRecordState(initial) {
 
 function normalizeShowPayload(raw) {
   const shows = Array.isArray(raw?.shows) ? raw.shows : []
+  const toSortKey = (s) => {
+    const start = String(s?.start_date || '').trim()
+    const publish = String(s?.publish_at || '').trim()
+    // Prefer start_date; fallback to publish_at; empty sorts last.
+    return start || publish || ''
+  }
+
   return {
-    shows: shows.map((s) => ({
-      place_id: s?.place_id ?? '',
-      start_date: s?.start_date ?? '',
-      end_date: s?.end_date ?? '',
-      publish_at: s?.publish_at ?? '',
-      unpublish_at: s?.unpublish_at ?? '',
-      booking_url: s?.booking_url ?? '',
-      ticket_cost: s?.ticket_cost ?? '',
-      times: Array.isArray(s?.times)
-        ? s.times.map((t) => ({ show_time: t?.show_time ?? '', notes: t?.notes ?? '' }))
-        : [{ show_time: '', notes: '' }],
-    })),
+    shows: shows
+      .map((s) => ({
+        __key: s?.__key ?? makeClientKey(),
+        place_id: s?.place_id ?? '',
+        start_date: s?.start_date ?? '',
+        end_date: s?.end_date ?? '',
+        publish_at: s?.publish_at ?? '',
+        unpublish_at: s?.unpublish_at ?? '',
+        booking_url: s?.booking_url ?? '',
+        ticket_cost: s?.ticket_cost ?? '',
+        times: Array.isArray(s?.times)
+          ? s.times.map((t) => ({ show_time: t?.show_time ?? '', notes: t?.notes ?? '' }))
+          : [{ show_time: '', notes: '' }],
+      }))
+      .sort((a, b) => {
+        const ak = toSortKey(a)
+        const bk = toSortKey(b)
+        if (!ak && !bk) return 0
+        if (!ak) return 1
+        if (!bk) return -1
+        // Descending: newer/larger strings first (works for YYYY-MM-DD and YYYY-MM-DD HH:mm:ss)
+        return bk.localeCompare(ak)
+      }),
   }
 }
 
@@ -52,6 +89,17 @@ function slugify(input) {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 220)
+}
+
+function ensureQuillStylesheet() {
+  if (typeof document === 'undefined') return
+  const id = 'quill-snow-css'
+  if (document.getElementById(id)) return
+  const link = document.createElement('link')
+  link.id = id
+  link.rel = 'stylesheet'
+  link.href = 'https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css'
+  document.head.appendChild(link)
 }
 
 export default function ListingTabbedForm(props) {
@@ -70,6 +118,7 @@ export default function ListingTabbedForm(props) {
   const [record, setRecord] = useState(() => buildRecordState(initialRecord))
   const [activeTab, setActiveTab] = useState('listing')
   const [showsPayload, setShowsPayload] = useState({ shows: [] })
+  const [openShowKey, setOpenShowKey] = useState(null)
   const [isSaving, setIsSaving] = useState(false)
 
   const isEdit = action?.name === 'edit'
@@ -121,12 +170,17 @@ export default function ListingTabbedForm(props) {
         p.propertyPath !== 'shows_payload' &&
         p.propertyPath !== 'banner_image' &&
         p.propertyPath !== 'trailer_url' &&
+        p.propertyPath !== 'description_html' &&
         p.propertyPath !== 'created_at' &&
         p.propertyPath !== 'updated_at' &&
         p.propertyPath !== 'created_by_admin_id' &&
         p.propertyPath !== 'updated_by_admin_id'
     )
   }, [resource])
+
+  useEffect(() => {
+    ensureQuillStylesheet()
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -286,6 +340,7 @@ export default function ListingTabbedForm(props) {
           })
           const timeRecords = Array.isArray(timesList?.data?.records) ? timesList.data.records : []
           shows.push({
+            __key: makeClientKey(),
             place_id: s?.params?.place_id ?? '',
             start_date: s?.params?.start_date ?? '',
             end_date: s?.params?.end_date ?? '',
@@ -302,6 +357,7 @@ export default function ListingTabbedForm(props) {
 
         if (!cancelled) {
           setShowsPayload(normalizeShowPayload({ shows }))
+          setOpenShowKey(shows[0]?.__key || null)
         }
       } catch (e) {
         if (!cancelled) {
@@ -319,25 +375,21 @@ export default function ListingTabbedForm(props) {
   }, [isEdit, listingId, api])
 
   const addShow = () => {
-    setShowsPayload((prev) => ({
-      shows: [
-        ...(prev?.shows || []),
-        {
-          place_id: '',
-          start_date: '',
-          end_date: '',
-          publish_at: '',
-          unpublish_at: '',
-          booking_url: '',
-          ticket_cost: '',
-          times: [{ show_time: '', notes: '' }],
-        },
-      ],
-    }))
+    const next = makeEmptyShow()
+    setShowsPayload((prev) => ({ shows: [next, ...(prev?.shows || [])] }))
+    setOpenShowKey(next.__key)
   }
 
   const removeShow = (idx) => {
-    setShowsPayload((prev) => ({ shows: (prev?.shows || []).filter((_, i) => i !== idx) }))
+    setShowsPayload((prev) => {
+      const shows = prev?.shows || []
+      const removed = shows[idx]
+      const nextShows = shows.filter((_, i) => i !== idx)
+      if (removed?.__key && removed.__key === openShowKey) {
+        setOpenShowKey(nextShows[0]?.__key || null)
+      }
+      return { shows: nextShows }
+    })
   }
 
   const updateShow = (idx, key, value) => {
@@ -443,6 +495,29 @@ export default function ListingTabbedForm(props) {
               onChange={handleListingFieldChange}
             />
           ))}
+
+          <Box mt="xl">
+            <Label>Description</Label>
+            <Box mt="sm" style={{ minHeight: 240 }}>
+              <ReactQuill
+                theme="snow"
+                value={String(record?.params?.description_html || '')}
+                onChange={(html) => handlePropertyChange('description_html', html)}
+                modules={{
+                  toolbar: [
+                    [{ header: [1, 2, 3, false] }],
+                    ['bold', 'italic', 'underline', 'strike'],
+                    [{ list: 'ordered' }, { list: 'bullet' }],
+                    ['blockquote', 'code-block'],
+                    ['link', 'image'],
+                    [{ color: [] }, { background: [] }],
+                    [{ align: [] }],
+                    ['clean'],
+                  ],
+                }}
+              />
+            </Box>
+          </Box>
         </Box>
       ) : activeTab === 'shows' ? (
         <Box mt="xl">
@@ -460,129 +535,161 @@ export default function ListingTabbedForm(props) {
             </Box>
           ) : null}
 
-          {(showsPayload?.shows || []).map((s, showIdx) => (
-            <Box key={showIdx} mt="xl" p="xl" border="1px solid" borderColor="grey40" borderRadius="lg">
-              <Box display="flex" justifyContent="space-between" alignItems="center">
-                <H2>Show #{showIdx + 1}</H2>
-                <Button type="button" variant="danger" size="sm" onClick={() => removeShow(showIdx)}>
-                  Remove
-                </Button>
-              </Box>
+          {(showsPayload?.shows || []).map((s, showIdx) => {
+            const isOpen = Boolean(s?.__key && openShowKey === s.__key)
+            const toggle = () => setOpenShowKey((prev) => (prev === s.__key ? null : s.__key))
 
-              <Box mt="lg">
-                <Label>Place</Label>
-                <Select
-                  isLoading={isPlacesLoading}
-                  options={placeOptions}
-                  placeholder="Select a place…"
-                  value={placeOptions.find((o) => String(o.value) === String(s.place_id)) || null}
-                  onChange={(opt) => updateShow(showIdx, 'place_id', opt?.value || '')}
-                />
-              </Box>
-
-              <Box mt="lg" display="grid" gridTemplateColumns="1fr 1fr" gridGap="16px">
-                <Box>
-                  <Label>Start date</Label>
-                  <DatePicker
-                    propertyType="date"
-                    value={s.start_date ? `${s.start_date}T00:00:00.000Z` : ''}
-                    onChange={(iso) => updateShow(showIdx, 'start_date', iso ? String(iso).slice(0, 10) : '')}
-                  />
-                </Box>
-                <Box>
-                  <Label>End date</Label>
-                  <DatePicker
-                    propertyType="date"
-                    value={s.end_date ? `${s.end_date}T00:00:00.000Z` : ''}
-                    onChange={(iso) => updateShow(showIdx, 'end_date', iso ? String(iso).slice(0, 10) : '')}
-                  />
-                </Box>
-              </Box>
-
-              <Box mt="lg" display="grid" gridTemplateColumns="1fr 1fr" gridGap="16px">
-                <Box>
-                  <Label>Publish at</Label>
-                  <DatePicker
-                    propertyType="datetime"
-                    value={s.publish_at ? String(s.publish_at).replace(' ', 'T') + '.000Z' : ''}
-                    onChange={(iso) =>
-                      updateShow(showIdx, 'publish_at', iso ? String(iso).replace('T', ' ').slice(0, 19) : '')
-                    }
-                  />
-                </Box>
-                <Box>
-                  <Label>Unpublish at</Label>
-                  <DatePicker
-                    propertyType="datetime"
-                    value={s.unpublish_at ? String(s.unpublish_at).replace(' ', 'T') + '.000Z' : ''}
-                    onChange={(iso) =>
-                      updateShow(showIdx, 'unpublish_at', iso ? String(iso).replace('T', ' ').slice(0, 19) : '')
-                    }
-                  />
-                </Box>
-              </Box>
-
-              <Box mt="lg">
-                <Label>Booking URL</Label>
-                <Input value={s.booking_url} onChange={(e) => updateShow(showIdx, 'booking_url', e.target.value)} />
-              </Box>
-
-              <Box mt="lg">
-                <Label>Ticket cost</Label>
-                <Input value={s.ticket_cost} onChange={(e) => updateShow(showIdx, 'ticket_cost', e.target.value)} />
-              </Box>
-
-              <Box mt="xl">
-                <Box display="flex" justifyContent="space-between" alignItems="center">
-                  <Text variant="lg">Show times</Text>
-                  <Button type="button" variant="secondary" size="sm" onClick={() => addTime(showIdx)}>
-                    Add time
-                  </Button>
+            return (
+              <Box key={s?.__key || showIdx} mt="xl" border="1px solid" borderColor="grey40" borderRadius="lg">
+                <Box
+                  as="button"
+                  type="button"
+                  onClick={toggle}
+                  display="flex"
+                  justifyContent="space-between"
+                  alignItems="center"
+                  width="100%"
+                  p="xl"
+                  style={{
+                    cursor: 'pointer',
+                    background: 'transparent',
+                    border: 0,
+                    textAlign: 'left',
+                  }}
+                  aria-expanded={isOpen}
+                >
+                  <H2 style={{ margin: 0 }}>Show #{showIdx + 1}</H2>
+                  <Text variant="sm" color="grey60">
+                    {isOpen ? 'Collapse' : 'Expand'}
+                  </Text>
                 </Box>
 
-                {(s.times || []).map((t, timeIdx) => (
-                  <Box key={timeIdx} mt="lg" p="lg" border="1px solid" borderColor="grey20" borderRadius="default">
-                    <Box display="flex" justifyContent="space-between" alignItems="center">
-                      <Text>Time #{timeIdx + 1}</Text>
-                      <Button
-                        type="button"
-                        variant="danger"
-                        size="sm"
-                        onClick={() => removeTime(showIdx, timeIdx)}
-                      >
+                {isOpen ? (
+                  <Box px="xl" pb="xl">
+                    <Box display="flex" justifyContent="flex-end">
+                      <Button type="button" variant="danger" size="sm" onClick={() => removeShow(showIdx)}>
                         Remove
                       </Button>
                     </Box>
 
-                    <Box mt="md">
-                      <Label>Show time</Label>
-                      <DatePicker
-                        propertyType="datetime"
-                        value={t.show_time ? String(t.show_time).replace(' ', 'T') + '.000Z' : ''}
-                        onChange={(iso) =>
-                          updateTime(
-                            showIdx,
-                            timeIdx,
-                            'show_time',
-                            iso ? String(iso).replace('T', ' ').slice(0, 19) : ''
-                          )
-                        }
+                    <Box mt="lg">
+                      <Label>Place</Label>
+                      <Select
+                        isLoading={isPlacesLoading}
+                        options={placeOptions}
+                        placeholder="Select a place…"
+                        value={placeOptions.find((o) => String(o.value) === String(s.place_id)) || null}
+                        onChange={(opt) => updateShow(showIdx, 'place_id', opt?.value || '')}
                       />
                     </Box>
 
-                    <Box mt="md">
-                      <Label>Notes</Label>
-                      <TextArea
-                        value={t.notes}
-                        onChange={(e) => updateTime(showIdx, timeIdx, 'notes', e.target.value)}
-                        rows={2}
-                      />
+                    <Box mt="lg" display="grid" gridTemplateColumns="1fr 1fr" gridGap="16px">
+                      <Box>
+                        <Label>Start date</Label>
+                        <DatePicker
+                          propertyType="date"
+                          value={s.start_date ? `${s.start_date}T00:00:00.000Z` : ''}
+                          onChange={(iso) => updateShow(showIdx, 'start_date', iso ? String(iso).slice(0, 10) : '')}
+                        />
+                      </Box>
+                      <Box>
+                        <Label>End date</Label>
+                        <DatePicker
+                          propertyType="date"
+                          value={s.end_date ? `${s.end_date}T00:00:00.000Z` : ''}
+                          onChange={(iso) => updateShow(showIdx, 'end_date', iso ? String(iso).slice(0, 10) : '')}
+                        />
+                      </Box>
+                    </Box>
+
+                    <Box mt="lg" display="grid" gridTemplateColumns="1fr 1fr" gridGap="16px">
+                      <Box>
+                        <Label>Publish at</Label>
+                        <DatePicker
+                          propertyType="datetime"
+                          value={s.publish_at ? String(s.publish_at).replace(' ', 'T') + '.000Z' : ''}
+                          onChange={(iso) =>
+                            updateShow(showIdx, 'publish_at', iso ? String(iso).replace('T', ' ').slice(0, 19) : '')
+                          }
+                        />
+                      </Box>
+                      <Box>
+                        <Label>Unpublish at</Label>
+                        <DatePicker
+                          propertyType="datetime"
+                          value={s.unpublish_at ? String(s.unpublish_at).replace(' ', 'T') + '.000Z' : ''}
+                          onChange={(iso) =>
+                            updateShow(showIdx, 'unpublish_at', iso ? String(iso).replace('T', ' ').slice(0, 19) : '')
+                          }
+                        />
+                      </Box>
+                    </Box>
+
+                    <Box mt="lg">
+                      <Label>Booking URL</Label>
+                      <Input value={s.booking_url} onChange={(e) => updateShow(showIdx, 'booking_url', e.target.value)} />
+                    </Box>
+
+                    <Box mt="lg">
+                      <Label>Ticket cost</Label>
+                      <Input value={s.ticket_cost} onChange={(e) => updateShow(showIdx, 'ticket_cost', e.target.value)} />
+                    </Box>
+
+                    <Box mt="xl">
+                      <Box display="flex" justifyContent="space-between" alignItems="center">
+                        <Text variant="lg">Show times</Text>
+                        <Button type="button" variant="secondary" size="sm" onClick={() => addTime(showIdx)}>
+                          Add time
+                        </Button>
+                      </Box>
+
+                      {(s.times || []).map((t, timeIdx) => (
+                        <Box key={timeIdx} mt="lg" p="lg" border="1px solid" borderColor="grey20" borderRadius="default">
+                          <Box display="flex" justifyContent="space-between" alignItems="center">
+                            <Text>Time #{timeIdx + 1}</Text>
+                            <Button
+                              type="button"
+                              variant="danger"
+                              size="sm"
+                              onClick={() => removeTime(showIdx, timeIdx)}
+                            >
+                              Remove
+                            </Button>
+                          </Box>
+
+                          <Box mt="md">
+                            <Label>Show time</Label>
+                            <DatePicker
+                              propertyType="datetime"
+                              value={t.show_time ? String(t.show_time).replace(' ', 'T') + '.000Z' : ''}
+                              onChange={(iso) =>
+                                updateTime(
+                                  showIdx,
+                                  timeIdx,
+                                  'show_time',
+                                  iso ? String(iso).replace('T', ' ').slice(0, 19) : ''
+                                )
+                              }
+                            />
+                          </Box>
+
+                          <Box mt="md">
+                            <Label>Notes</Label>
+                            <TextArea
+                              value={t.notes}
+                              onChange={(e) => updateTime(showIdx, timeIdx, 'notes', e.target.value)}
+                              rows={2}
+                              style={{ minHeight: 300 }}
+                            />
+                          </Box>
+                        </Box>
+                      ))}
                     </Box>
                   </Box>
-                ))}
+                ) : null}
               </Box>
-            </Box>
-          ))}
+            )
+          })}
         </Box>
       ) : (
         <Box mt="xl">
