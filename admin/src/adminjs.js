@@ -17,6 +17,7 @@ export async function buildAdminJs() {
       path.join(__dirname, 'components', 'ListingTabbedForm.jsx')
     ),
     ImageThumb: componentLoader.add('ImageThumb', path.join(__dirname, 'components', 'ImageThumb.jsx')),
+    CodePreview: componentLoader.add('CodePreview', path.join(__dirname, 'components', 'CodePreview.jsx')),
   }
 
   const databaseName = process.env.DB_NAME || 'aus-booking'
@@ -371,6 +372,74 @@ export async function buildAdminJs() {
                     },
                   }
                 }
+              },
+            },
+          },
+        },
+      },
+      {
+        resource: db.table('promotions'),
+        options: {
+          navigation: { name: 'Content', icon: 'Gift' },
+          listProperties: [
+            'image_path',
+            'title',
+            'slug',
+            'promo_type',
+            'youtube_url',
+            'embed_html',
+            'status',
+            'publish_at',
+            'unpublish_at',
+            'sort_order',
+          ],
+          properties: {
+            created_at: { isVisible: false },
+            updated_at: { isVisible: false },
+            created_by_admin_id: { isVisible: false, reference: 'admins' },
+            updated_by_admin_id: { isVisible: false, reference: 'admins' },
+            promo_type: {
+              availableValues: [
+                { value: 'image', label: 'Image' },
+                { value: 'youtube', label: 'YouTube' },
+                { value: 'html', label: 'Embed HTML' },
+              ],
+            },
+            youtube_url: {
+              props: { placeholder: 'https://youtube.com/watch?v=...' },
+              components: {
+                list: Components.CodePreview,
+                show: Components.CodePreview,
+              },
+            },
+            image_path: {
+              components: {
+                list: Components.ImageThumb,
+                show: Components.ImageThumb,
+              },
+            },
+            embed_html: {
+              type: 'textarea',
+              props: { rows: 10 },
+              components: {
+                list: Components.CodePreview,
+                show: Components.CodePreview,
+              },
+            },
+          },
+          actions: {
+            new: {
+              before: async (request, context) => {
+                ensureListingTimestamps(request, { isNew: true })
+                ensureListingAuditAdmins(request, context, { isNew: true })
+                return request
+              },
+            },
+            edit: {
+              before: async (request, context) => {
+                ensureListingTimestamps(request, { isNew: false })
+                ensureListingAuditAdmins(request, context, { isNew: false })
+                return request
               },
             },
           },

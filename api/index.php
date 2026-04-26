@@ -36,6 +36,104 @@ function is_listing_visible_row(array $row): bool
   return true;
 }
 
+function is_promotion_visible_row(array $row): bool
+{
+  if (($row['status'] ?? '') !== 'published') return false;
+  $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+  if (!empty($row['publish_at'])) {
+    $pub = new DateTimeImmutable($row['publish_at'], new DateTimeZone('UTC'));
+    if ($pub > $now) return false;
+  }
+  if (!empty($row['unpublish_at'])) {
+    $unpub = new DateTimeImmutable($row['unpublish_at'], new DateTimeZone('UTC'));
+    if ($unpub <= $now) return false;
+  }
+  return true;
+}
+
+function youtube_embed_url(?string $url): ?string
+{
+  $url = trim((string)$url);
+  if ($url === '') return null;
+  $parts = parse_url($url);
+  if (!is_array($parts)) return null;
+  $host = strtolower((string)($parts['host'] ?? ''));
+  $path = (string)($parts['path'] ?? '');
+  $query = (string)($parts['query'] ?? '');
+
+  if ($host === 'youtu.be' || str_ends_with($host, '.youtu.be')) {
+    $id = trim($path, '/');
+    if ($id !== '') return "https://www.youtube.com/embed/" . rawurlencode($id);
+  }
+  if ($host === 'youtube.com' || str_ends_with($host, '.youtube.com')) {
+    parse_str($query, $qs);
+    $id = isset($qs['v']) ? (string)$qs['v'] : '';
+    if ($id !== '') return "https://www.youtube.com/embed/" . rawurlencode($id);
+  }
+  return null;
+}
+
+function promotion_render_html(array $p): string
+{
+  $type = (string)($p['promo_type'] ?? 'image');
+  $title = (string)($p['title'] ?? '');
+
+  if ($type === 'youtube') {
+    $embed = youtube_embed_url((string)($p['youtube_url'] ?? ''));
+    if (!$embed) return '';
+    $t = htmlspecialchars($title !== '' ? $title : 'Promotion video', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $src = htmlspecialchars($embed, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    return '<div class="promo promo--youtube"><div class="promo__media" style="position:relative;padding-top:56.25%"><iframe src="' . $src . '" title="' . $t . '" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen style="position:absolute;inset:0;width:100%;height:100%;border:0"></iframe></div></div>';
+  }
+
+  if ($type === 'html') {
+    return (string)($p['embed_html'] ?? '');
+  }
+
+  // image (default)
+  $path = trim((string)($p['image_path'] ?? ''));
+  if ($path === '') return '';
+  $src = '/' . ltrim($path, '/');
+  $src = htmlspecialchars($src, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+  $alt = htmlspecialchars($title !== '' ? $title : 'Promotion', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+  return '<div class="promo promo--image"><img src="' . $src . '" alt="' . $alt . '" style="max-width:100%;height:auto;display:block" /></div>';
+}
+
+function expand_promotion_shortcodes(PDO $pdo, ?string $html): ?string
+{
+  if ($html === null || trim($html) === '') return $html;
+  if (stripos($html, '[promotion') === false) return $html;
+
+  // [promotion id="123"] or [promotion slug="summer-sale"]
+  return preg_replace_callback('/\[promotion\s+([^\]]+)\]/i', function ($m) use ($pdo) {
+    $attrsRaw = (string)($m[1] ?? '');
+    $attrs = [];
+    if (preg_match_all('/(\w+)\s*=\s*"([^"]*)"/', $attrsRaw, $mm, PREG_SET_ORDER)) {
+      foreach ($mm as $a) {
+        $attrs[strtolower($a[1])] = $a[2];
+      }
+    }
+
+    $id = isset($attrs['id']) ? (int)$attrs['id'] : 0;
+    $slug = isset($attrs['slug']) ? trim((string)$attrs['slug']) : '';
+
+    if ($id <= 0 && $slug === '') {
+      return '';
+    }
+
+    if ($id > 0) {
+      $stmt = $pdo->prepare("SELECT * FROM promotions WHERE id = :id LIMIT 1");
+      $stmt->execute([':id' => $id]);
+    } else {
+      $stmt = $pdo->prepare("SELECT * FROM promotions WHERE slug = :s LIMIT 1");
+      $stmt->execute([':s' => $slug]);
+    }
+    $p = $stmt->fetch();
+    if (!$p || !is_promotion_visible_row($p)) return '';
+    return promotion_render_html($p);
+  }, $html);
+}
+
 function read_client_ip(): ?string
 {
   return $_SERVER['REMOTE_ADDR'] ?? null;
@@ -107,6 +205,9 @@ if ($method === 'GET' && preg_match('#^/listings/([^/]+)$#', $path, $m)) {
   if (!$listing || !is_listing_visible_row($listing)) {
     json_response(['error' => 'not_found'], 404);
   }
+
+  // Expand promotions shortcodes inside listing HTML
+  $listing['description_html'] = expand_promotion_shortcodes($pdo, $listing['description_html'] ?? null);
 
   $stmt = $pdo->prepare("SELECT id, image_path, sort_order FROM listing_gallery_images WHERE listing_id = :id ORDER BY sort_order ASC, id ASC");
   $stmt->execute([':id' => $listing['id']]);
@@ -185,6 +286,36 @@ if ($method === 'GET' && preg_match('#^/listings/([^/]+)$#', $path, $m)) {
     'comments' => $comments,
     'rating' => $ratingAgg,
   ]);
+}
+
+// Public: list active promotions
+if ($method === 'GET' && $path === '/promotions') {
+  $pdo = db();
+  $stmt = $pdo->prepare("
+    SELECT id, title, slug, promo_type, youtube_url, image_path, embed_html, status, publish_at, unpublish_at, sort_order
+    FROM promotions
+    WHERE status = 'published'
+      AND (publish_at IS NULL OR publish_at <= UTC_TIMESTAMP())
+      AND (unpublish_at IS NULL OR unpublish_at > UTC_TIMESTAMP())
+    ORDER BY sort_order ASC, COALESCE(publish_at, created_at) DESC, id DESC
+    LIMIT 100
+  ");
+  $stmt->execute();
+  $rows = $stmt->fetchAll();
+  json_response(['items' => $rows]);
+}
+
+// Public: promotion detail (by slug)
+if ($method === 'GET' && preg_match('#^/promotions/([^/]+)$#', $path, $m)) {
+  $slug = $m[1];
+  $pdo = db();
+  $stmt = $pdo->prepare("SELECT * FROM promotions WHERE slug = :s LIMIT 1");
+  $stmt->execute([':s' => $slug]);
+  $p = $stmt->fetch();
+  if (!$p || !is_promotion_visible_row($p)) {
+    json_response(['error' => 'not_found'], 404);
+  }
+  json_response(['promotion' => $p, 'rendered_html' => promotion_render_html($p)]);
 }
 
 // Auth: register

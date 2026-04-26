@@ -159,6 +159,54 @@ async function start() {
     }
   )
 
+  // Upload endpoint for promotion image (single)
+  app.post(
+    `${adminJs.options.rootPath}/api/uploads/promotion-image`,
+    formidableMiddleware({
+      multiples: false,
+      maxFileSize: 4 * 1024 * 1024, // 4MB
+    }),
+    async (req, res) => {
+      try {
+        const file = req.files?.file ?? req.files?.image ?? req.files?.files ?? null
+        const f = Array.isArray(file) ? file[0] : file
+        if (!f) return res.status(400).json({ error: 'No file uploaded' })
+
+        const type = String(f?.type || '')
+        if (!type.startsWith('image/')) {
+          return res.status(400).json({ error: 'Only image uploads are allowed' })
+        }
+        const size = Number(f?.size || 0)
+        if (size > 4 * 1024 * 1024) {
+          return res.status(400).json({ error: 'File must be <= 4MB' })
+        }
+
+        const orig = String(f?.name || 'image')
+        const ext = path.extname(orig).slice(0, 10) || '.jpg'
+        const safeExt = ext.replace(/[^.\w]/g, '')
+        const name = `promo_${Date.now()}_${Math.random().toString(16).slice(2)}${safeExt}`
+        const destAbs = path.join(UPLOAD_DIR, name)
+        const tmp = f?.path
+        if (!tmp) return res.status(400).json({ error: 'Invalid upload' })
+        // `rename` fails across drives on Windows (EXDEV). Use copy+unlink to "move".
+        await fs.copyFile(tmp, destAbs)
+        await fs.unlink(tmp).catch(() => {})
+
+        res.json({
+          file: {
+            fileName: name,
+            publicUrl: `${adminJs.options.rootPath}/uploads-root/${encodeURIComponent(name)}`,
+            storedPath: `Upload/${name}`,
+          },
+        })
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('upload error', e)
+        res.status(500).json({ error: e?.message || String(e) })
+      }
+    }
+  )
+
   const cfg = getDbConfig()
   const sequelize = new Sequelize(cfg.database, cfg.user, cfg.password, {
     host: cfg.host,
