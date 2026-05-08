@@ -1,0 +1,43 @@
+/* Sidebar: bigger font + icons */
+[data-css="sidebar"] .adminjs_Navigation,
+[data-css="sidebar"] .adminjs_Navigation * {
+  font-size: 14px;
+}
+
+/* Section label */
+[data-css="sidebar"] .adminjs_Navigation__Label,
+[data-css="sidebar"] [class*="Navigation__Label"] {
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+/* Menu links */
+[data-css="sidebar"] a,
+[data-css="sidebar"] button {
+  font-size: 14px;
+}
+
+/* Icons inside navigation */
+[data-css="sidebar"] svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Slightly larger row height for readability */
+[data-css="sidebar"] [class*="NavigationElement"] {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+/* Global: cap date/time picker width */
+.adminjs_DatePicker,
+.adminjs_DatePicker .react-datepicker-wrapper,
+.adminjs_DatePicker .react-datepicker-wrapper input {
+  max-width: 300px;
+}
+
+/* Also cap native time inputs used in custom forms */
+input[type="time"] {
+  max-width: 300px;
+}
+

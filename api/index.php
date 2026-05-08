@@ -216,7 +216,7 @@ if ($method === 'GET' && preg_match('#^/listings/([^/]+)$#', $path, $m)) {
   $stmt = $pdo->prepare("
     SELECT
       s.*,
-      p.name AS place_name, p.address AS place_address,
+      p.name AS place_name, p.address AS place_address, p.google_map_link AS place_google_map_link,
       c.name AS city_name,
       st.name AS state_name,
       co.name AS country_name

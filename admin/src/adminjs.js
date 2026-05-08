@@ -18,6 +18,58 @@ export async function buildAdminJs() {
     ),
     ImageThumb: componentLoader.add('ImageThumb', path.join(__dirname, 'components', 'ImageThumb.jsx')),
     CodePreview: componentLoader.add('CodePreview', path.join(__dirname, 'components', 'CodePreview.jsx')),
+    DuplicateListingAction: componentLoader.add(
+      'DuplicateListingAction',
+      path.join(__dirname, 'components', 'DuplicateListingAction.jsx')
+    ),
+    PlaceGoogleMapLink: componentLoader.add(
+      'PlaceGoogleMapLink',
+      path.join(__dirname, 'components', 'PlaceGoogleMapLink.jsx')
+    ),
+    ListingGalleryGrid: componentLoader.add(
+      'ListingGalleryGrid',
+      path.join(__dirname, 'components', 'ListingGalleryGrid.jsx')
+    ),
+    GalleryImageUpload: componentLoader.add(
+      'GalleryImageUpload',
+      path.join(__dirname, 'components', 'GalleryImageUpload.jsx')
+    ),
+    CastImageUpload: componentLoader.add(
+      'CastImageUpload',
+      path.join(__dirname, 'components', 'CastImageUpload.jsx')
+    ),
+    CastNameWithDuplicateHint: componentLoader.add(
+      'CastNameWithDuplicateHint',
+      path.join(__dirname, 'components', 'CastNameWithDuplicateHint.jsx')
+    ),
+    PlaceNameWithDuplicateHint: componentLoader.add(
+      'PlaceNameWithDuplicateHint',
+      path.join(__dirname, 'components', 'PlaceNameWithDuplicateHint.jsx')
+    ),
+    FlagImageUpload: componentLoader.add(
+      'FlagImageUpload',
+      path.join(__dirname, 'components', 'FlagImageUpload.jsx')
+    ),
+    ListingStatusBadge: componentLoader.add(
+      'ListingStatusBadge',
+      path.join(__dirname, 'components', 'ListingStatusBadge.jsx')
+    ),
+    ListingPublishDate: componentLoader.add(
+      'ListingPublishDate',
+      path.join(__dirname, 'components', 'ListingPublishDate.jsx')
+    ),
+    ListingUnpublishDate: componentLoader.add(
+      'ListingUnpublishDate',
+      path.join(__dirname, 'components', 'ListingUnpublishDate.jsx')
+    ),
+    ListingTitleLarge: componentLoader.add(
+      'ListingTitleLarge',
+      path.join(__dirname, 'components', 'ListingTitleLarge.jsx')
+    ),
+    DashboardTiles: componentLoader.add(
+      'DashboardTiles',
+      path.join(__dirname, 'components', 'DashboardTiles.jsx')
+    ),
   }
 
   const databaseName = process.env.DB_NAME || 'aus-booking'
@@ -60,6 +112,59 @@ export async function buildAdminJs() {
     request._listingGalleryPayload = typeof raw === 'string' ? raw : String(raw)
     if (request.payload) delete request.payload.gallery_payload
     if (request.fields) delete request.fields.gallery_payload
+  }
+
+  /** Not a DB column — cast ids list from the custom form; must be removed before SQL insert/update. */
+  function stashListingCastsPayload(request) {
+    if (!request) return
+    const fromPayload =
+      request.payload && Object.prototype.hasOwnProperty.call(request.payload, 'casts_payload')
+        ? request.payload.casts_payload
+        : undefined
+    const fromFields =
+      request.fields && Object.prototype.hasOwnProperty.call(request.fields, 'casts_payload')
+        ? request.fields.casts_payload
+        : undefined
+    const raw = fromPayload !== undefined ? fromPayload : fromFields
+    if (raw === undefined || raw === null) return
+    request._listingCastsPayload = typeof raw === 'string' ? raw : String(raw)
+    if (request.payload) delete request.payload.casts_payload
+    if (request.fields) delete request.fields.casts_payload
+  }
+
+  /** Express / JSON.stringify cannot serialize BigInt; mysql2 may surface BIGINT values as bigint. */
+  function stripBigIntDeep(value) {
+    if (typeof value === 'bigint') return value.toString()
+    if (Array.isArray(value)) return value.map(stripBigIntDeep)
+    if (value && typeof value === 'object') {
+      const out = {}
+      for (const [k, v] of Object.entries(value)) {
+        out[k] = stripBigIntDeep(v)
+      }
+      return out
+    }
+    return value
+  }
+
+  /**
+   * Refresh `record` from `context.record` after hooks so POST /edit responses always include full
+   * RecordJSON (`recordActions`, etc.). Without this, ApiController can throw ConfigurationError after
+   * the listing row was already committed, producing HTTP 500 despite a successful save.
+   */
+  function attachFreshListingRecordJson(response, context) {
+    if (!response || typeof response !== 'object') return response
+    const live = context?.record
+    const currentAdmin = context?.currentAdmin
+    if (!live || typeof live.toJSON !== 'function') return response
+    try {
+      const recordJson = live.toJSON(currentAdmin)
+      return {
+        ...response,
+        record: stripBigIntDeep(recordJson),
+      }
+    } catch {
+      return response
+    }
   }
 
   function mysqlNow() {
@@ -219,11 +324,215 @@ export async function buildAdminJs() {
     }
   }
 
+  async function upsertListingCasts({ listingId, castIds }) {
+    const pool = dbPool()
+    const conn = await pool.getConnection()
+    try {
+      await conn.beginTransaction()
+      await conn.execute(`DELETE FROM listing_casts WHERE listing_id = ?`, [listingId])
+      const ids = Array.isArray(castIds) ? castIds.map((x) => Number(x)).filter((n) => Number.isFinite(n) && n > 0) : []
+      let sort = 0
+      for (const castId of ids) {
+        await conn.execute(
+          `INSERT INTO listing_casts (listing_id, cast_id, sort_order) VALUES (?, ?, ?)`,
+          [listingId, castId, sort]
+        )
+        sort += 1
+      }
+      await conn.commit()
+    } catch (e) {
+      try {
+        await conn.rollback()
+      } catch {
+        // ignore
+      }
+      throw e
+    } finally {
+      conn.release()
+    }
+  }
+
+  async function makeUniqueListingSlug(conn, sourceSlug) {
+    const maxLen = 220
+    const safeRoot = sourceSlug.length <= 180 ? sourceSlug : sourceSlug.slice(0, 180)
+    let candidate = `${safeRoot}-copy`
+    let n = 2
+    for (;;) {
+      const slug = candidate.length > maxLen ? candidate.slice(0, maxLen) : candidate
+      const [rows] = await conn.execute(`SELECT id FROM listings WHERE slug = ? LIMIT 1`, [slug])
+      if (!Array.isArray(rows) || rows.length === 0) return slug
+      candidate = `${safeRoot}-copy-${n}`
+      n += 1
+    }
+  }
+
+  async function duplicateListing({ sourceListingId, currentAdmin }) {
+    const pool = dbPool()
+    const conn = await pool.getConnection()
+    const now = mysqlNow()
+    const adminId = currentAdmin?.id != null ? Number(currentAdmin.id) : null
+
+    try {
+      await conn.beginTransaction()
+
+      const [srcRows] = await conn.execute(
+        `
+          SELECT type_id, title, slug, description_html, banner_image, trailer_url,
+                 status, publish_at, unpublish_at
+          FROM listings WHERE id = ?
+        `,
+        [sourceListingId]
+      )
+      const src = Array.isArray(srcRows) && srcRows[0] ? srcRows[0] : null
+      if (!src) {
+        throw new Error('Listing not found')
+      }
+
+      const newSlug = await makeUniqueListingSlug(conn, String(src.slug))
+      const newTitle = `${String(src.title)} (copy)`
+
+      const [ins] = await conn.execute(
+        `
+          INSERT INTO listings
+            (type_id, title, slug, description_html, banner_image, trailer_url,
+             status, publish_at, unpublish_at, created_by_admin_id, updated_by_admin_id,
+             created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          src.type_id,
+          newTitle,
+          newSlug,
+          src.description_html,
+          src.banner_image,
+          src.trailer_url,
+          src.status,
+          src.publish_at,
+          src.unpublish_at,
+          Number.isFinite(adminId) ? adminId : null,
+          Number.isFinite(adminId) ? adminId : null,
+          now,
+          now,
+        ]
+      )
+      const newListingId = ins?.insertId
+      if (!newListingId) throw new Error('Failed to create duplicate listing')
+
+      const [galleryRows] = await conn.execute(
+        `SELECT image_path, sort_order FROM listing_gallery_images WHERE listing_id = ? ORDER BY sort_order ASC, id ASC`,
+        [sourceListingId]
+      )
+      for (const row of Array.isArray(galleryRows) ? galleryRows : []) {
+        await conn.execute(
+          `INSERT INTO listing_gallery_images (listing_id, image_path, sort_order) VALUES (?, ?, ?)`,
+          [newListingId, row.image_path, row.sort_order]
+        )
+      }
+
+      const [relatedRows] = await conn.execute(
+        `SELECT related_listing_id FROM listing_related WHERE listing_id = ?`,
+        [sourceListingId]
+      )
+      for (const row of Array.isArray(relatedRows) ? relatedRows : []) {
+        await conn.execute(`INSERT INTO listing_related (listing_id, related_listing_id) VALUES (?, ?)`, [
+          newListingId,
+          row.related_listing_id,
+        ])
+      }
+
+      const [showRows] = await conn.execute(
+        `
+          SELECT id, place_id, start_date, end_date, publish_at, unpublish_at, booking_url, ticket_cost
+          FROM shows WHERE listing_id = ?
+        `,
+        [sourceListingId]
+      )
+
+      for (const show of Array.isArray(showRows) ? showRows : []) {
+        const [showIns] = await conn.execute(
+          `
+            INSERT INTO shows
+              (listing_id, place_id, start_date, end_date, publish_at, unpublish_at, booking_url, ticket_cost,
+               created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+          [
+            newListingId,
+            show.place_id,
+            show.start_date,
+            show.end_date,
+            show.publish_at,
+            show.unpublish_at,
+            show.booking_url,
+            show.ticket_cost,
+            now,
+            now,
+          ]
+        )
+        const newShowId = showIns?.insertId
+        if (!newShowId) continue
+
+        const [timeRows] = await conn.execute(
+          `SELECT show_time, notes FROM show_times WHERE show_id = ? ORDER BY id ASC`,
+          [show.id]
+        )
+        for (const t of Array.isArray(timeRows) ? timeRows : []) {
+          await conn.execute(`INSERT INTO show_times (show_id, show_time, notes) VALUES (?, ?, ?)`, [
+            newShowId,
+            t.show_time,
+            t.notes,
+          ])
+        }
+      }
+
+      await conn.commit()
+      return { newListingId: Number(newListingId) }
+    } catch (e) {
+      try {
+        await conn.rollback()
+      } catch {
+        // ignore
+      }
+      throw e
+    } finally {
+      conn.release()
+    }
+  }
+
   const admin = new AdminJS({
     rootPath: '/admin',
     branding: {
       companyName: 'AUS Ticket Lanka',
       softwareBrothers: false,
+    },
+    assets: {
+      styles: ['/admin/assets/admin-custom.css'],
+    },
+    dashboard: {
+      component: Components.DashboardTiles,
+      handler: async () => {
+        const pool = dbPool()
+        const [[l]] = await pool.execute(`SELECT COUNT(*) AS cnt FROM listings`)
+        const [[u]] = await pool.execute(`SELECT COUNT(*) AS cnt FROM users`)
+        const [[c]] = await pool.execute(`SELECT COUNT(*) AS cnt FROM comments`)
+        const [recent] = await pool.execute(
+          `
+            SELECT
+              l.id, l.title, l.status, l.publish_at, l.created_at,
+              t.name AS type_name
+            FROM listings l
+            JOIN types t ON t.id = l.type_id
+            ORDER BY l.created_at DESC, l.id DESC
+            LIMIT 8
+          `
+        )
+        return {
+          listingCount: Number(l?.cnt || 0),
+          userCount: Number(u?.cnt || 0),
+          commentCount: Number(c?.cnt || 0),
+          recentListings: Array.isArray(recent) ? recent : [],
+        }
+      },
     },
     componentLoader,
     resources: [
@@ -280,6 +589,48 @@ export async function buildAdminJs() {
         },
       },
       {
+        resource: db.table('casts'),
+        options: {
+          navigation: { name: 'Users', icon: 'User' },
+          sort: { sortBy: 'created_at', direction: 'desc' },
+          listProperties: ['image_path', 'name', 'position', 'facebook_url', 'instagram_url', 'tiktok_url', 'wikipedia_url'],
+          properties: hideAuditProperties({
+            image_path: {
+              components: {
+                list: Components.CastImageUpload,
+                show: Components.CastImageUpload,
+                edit: Components.CastImageUpload,
+              },
+            },
+            name: {
+              components: {
+                edit: Components.CastNameWithDuplicateHint,
+              },
+            },
+            description: { type: 'textarea', props: { rows: 8 } },
+          }),
+        },
+      },
+      {
+        resource: db.table('listing_casts'),
+        options: {
+          navigation: null,
+          properties: {
+            listing_id: { reference: 'listings' },
+            cast_id: { reference: 'casts' },
+            created_at: { isVisible: false },
+          },
+          actions: {
+            list: { isVisible: false },
+            show: { isVisible: false },
+            new: { isVisible: false },
+            edit: { isVisible: false },
+            delete: { isVisible: false },
+            bulkDelete: { isVisible: false },
+          },
+        },
+      },
+      {
         resource: db.table('types'),
         options: { navigation: { name: 'Content', icon: 'Catalog' }, properties: { created_at: { isVisible: false }, updated_at: { isVisible: false } } },
       },
@@ -287,6 +638,7 @@ export async function buildAdminJs() {
         resource: db.table('listings'),
         options: {
           navigation: { name: 'Content', icon: 'Movie' },
+          sort: { sortBy: 'created_at', direction: 'desc' },
           listProperties: ['banner_image', 'title', 'slug', 'type_id', 'status', 'publish_at', 'unpublish_at'],
           properties: {
             created_at: { isVisible: false },
@@ -294,6 +646,23 @@ export async function buildAdminJs() {
             created_by_admin_id: { isVisible: false, reference: 'admins' },
             updated_by_admin_id: { isVisible: false, reference: 'admins' },
             type_id: { reference: 'types' },
+            title: {
+              components: { edit: Components.ListingTitleLarge },
+            },
+            status: {
+              components: {
+                list: Components.ListingStatusBadge,
+                show: Components.ListingStatusBadge,
+              },
+            },
+            publish_at: {
+              type: 'date',
+              components: { edit: Components.ListingPublishDate },
+            },
+            unpublish_at: {
+              type: 'date',
+              components: { edit: Components.ListingUnpublishDate },
+            },
             description_html: { type: 'textarea', props: { rows: 12 } },
             banner_image: {
               isVisible: { list: true, show: true, edit: false, filter: false },
@@ -311,13 +680,14 @@ export async function buildAdminJs() {
                 ensureListingAuditAdmins(request, context, { isNew: true })
                 stashListingShowsPayload(request)
                 stashListingGalleryPayload(request)
+                stashListingCastsPayload(request)
                 return request
               },
-              after: async (response, request) => {
+              after: async (response, request, context) => {
                 try {
                   const recordId = response?.record?.id
                   const payload = request?._listingShowsPayload
-                  if (!recordId || !payload) return response
+                  if (!recordId || !payload) return attachFreshListingRecordJson(response, context)
                   const parsed = JSON.parse(String(payload))
                   const shows = Array.isArray(parsed?.shows) ? parsed.shows : []
                   await upsertListingShows({ listingId: Number(recordId), shows })
@@ -327,15 +697,24 @@ export async function buildAdminJs() {
                     const images = Array.isArray(gParsed?.images) ? gParsed.images : []
                     await upsertListingGallery({ listingId: Number(recordId), images })
                   }
-                  return response
-                } catch (e) {
-                  return {
-                    ...response,
-                    notice: {
-                      message: `Listing saved but shows failed to save: ${e?.message || e}`,
-                      type: 'error',
-                    },
+                  const castsPayload = request?._listingCastsPayload
+                  if (castsPayload) {
+                    const cParsed = JSON.parse(String(castsPayload))
+                    const castIds = Array.isArray(cParsed?.cast_ids) ? cParsed.cast_ids : []
+                    await upsertListingCasts({ listingId: Number(recordId), castIds })
                   }
+                  return attachFreshListingRecordJson(response, context)
+                } catch (e) {
+                  return attachFreshListingRecordJson(
+                    {
+                      ...response,
+                      notice: {
+                        message: `Listing saved but shows failed to save: ${e?.message || e}`,
+                        type: 'error',
+                      },
+                    },
+                    context
+                  )
                 }
               },
             },
@@ -346,13 +725,14 @@ export async function buildAdminJs() {
                 ensureListingAuditAdmins(request, context, { isNew: false })
                 stashListingShowsPayload(request)
                 stashListingGalleryPayload(request)
+                stashListingCastsPayload(request)
                 return request
               },
-              after: async (response, request) => {
+              after: async (response, request, context) => {
                 try {
                   const recordId = response?.record?.id
                   const payload = request?._listingShowsPayload
-                  if (!recordId || !payload) return response
+                  if (!recordId || !payload) return attachFreshListingRecordJson(response, context)
                   const parsed = JSON.parse(String(payload))
                   const shows = Array.isArray(parsed?.shows) ? parsed.shows : []
                   await upsertListingShows({ listingId: Number(recordId), shows })
@@ -362,12 +742,70 @@ export async function buildAdminJs() {
                     const images = Array.isArray(gParsed?.images) ? gParsed.images : []
                     await upsertListingGallery({ listingId: Number(recordId), images })
                   }
-                  return response
+                  const castsPayload = request?._listingCastsPayload
+                  if (castsPayload) {
+                    const cParsed = JSON.parse(String(castsPayload))
+                    const castIds = Array.isArray(cParsed?.cast_ids) ? cParsed.cast_ids : []
+                    await upsertListingCasts({ listingId: Number(recordId), castIds })
+                  }
+                  return attachFreshListingRecordJson(response, context)
+                } catch (e) {
+                  return attachFreshListingRecordJson(
+                    {
+                      ...response,
+                      notice: {
+                        message: `Listing saved but shows failed to save: ${e?.message || e}`,
+                        type: 'error',
+                      },
+                    },
+                    context
+                  )
+                }
+              },
+            },
+            duplicate: {
+              actionType: 'record',
+              icon: 'Copy',
+              component: Components.DuplicateListingAction,
+              handler: async (request, _response, context) => {
+                const { record, resource, currentAdmin, h } = context
+                if (!request.params.recordId || !record) {
+                  throw new Error(['You have to pass "recordId" to duplicate listing'].join('\n'))
+                }
+                if (request.method === 'get') {
+                  return {
+                    record: record.toJSON(currentAdmin),
+                  }
+                }
+                try {
+                  const { newListingId } = await duplicateListing({
+                    sourceListingId: Number(request.params.recordId),
+                    currentAdmin,
+                  })
+                  const newRecord = await resource.findOne(String(newListingId))
+                  if (!newRecord) {
+                    return {
+                      record: record.toJSON(currentAdmin),
+                      notice: {
+                        message: 'Listing duplicated but could not load the new record.',
+                        type: 'error',
+                      },
+                    }
+                  }
+                  const resourceId = resource._decorated?.id() || resource.id()
+                  return {
+                    record: newRecord.toJSON(currentAdmin),
+                    redirectUrl: h.editUrl(resourceId, String(newListingId)),
+                    notice: {
+                      message: `Duplicated as "${newRecord.params?.title ?? 'copy'}".`,
+                      type: 'success',
+                    },
+                  }
                 } catch (e) {
                   return {
-                    ...response,
+                    record: record.toJSON(currentAdmin),
                     notice: {
-                      message: `Listing saved but shows failed to save: ${e?.message || e}`,
+                      message: e?.message || String(e),
                       type: 'error',
                     },
                   }
@@ -449,15 +887,20 @@ export async function buildAdminJs() {
         resource: db.table('listing_gallery_images'),
         options: {
           navigation: { name: 'Content', icon: 'Image' },
+          sort: { sortBy: 'created_at', direction: 'desc' },
           properties: {
             listing_id: { reference: 'listings' },
             image_path: {
               components: {
                 list: Components.ImageThumb,
                 show: Components.ImageThumb,
+                edit: Components.GalleryImageUpload,
               },
             },
             created_at: { isVisible: false },
+          },
+          actions: {
+            list: { component: Components.ListingGalleryGrid, perPage: 20 },
           },
         },
       },
@@ -466,10 +909,51 @@ export async function buildAdminJs() {
         options: { navigation: { name: 'Content', icon: 'Link' }, properties: { created_at: { isVisible: false } } },
       },
 
-      { resource: db.table('countries'), options: { navigation: { name: 'Locations', icon: 'Map' }, properties: { created_at: { isVisible: false }, updated_at: { isVisible: false } } } },
+      {
+        resource: db.table('countries'),
+        options: {
+          navigation: { name: 'Locations', icon: 'Map' },
+          listProperties: ['flag_image_path', 'name', 'code'],
+          properties: {
+            flag_image_path: {
+              components: {
+                list: Components.FlagImageUpload,
+                show: Components.FlagImageUpload,
+                edit: Components.FlagImageUpload,
+              },
+            },
+            created_at: { isVisible: false },
+            updated_at: { isVisible: false },
+          },
+        },
+      },
       { resource: db.table('states'), options: { navigation: { name: 'Locations', icon: 'Map' }, properties: { created_at: { isVisible: false }, updated_at: { isVisible: false } } } },
       { resource: db.table('cities'), options: { navigation: { name: 'Locations', icon: 'Map' }, properties: { created_at: { isVisible: false }, updated_at: { isVisible: false } } } },
-      { resource: db.table('places'), options: { navigation: { name: 'Locations', icon: 'Pin' }, properties: { created_at: { isVisible: false }, updated_at: { isVisible: false } } } },
+      {
+        resource: db.table('places'),
+        options: {
+          navigation: { name: 'Locations', icon: 'Pin' },
+          listProperties: ['name', 'city_id', 'address', 'google_map_link'],
+          properties: {
+            name: {
+              components: {
+                edit: Components.PlaceNameWithDuplicateHint,
+              },
+            },
+            city_id: { reference: 'cities' },
+            google_map_link: {
+              props: { placeholder: 'https://maps.google.com/?q=...' },
+              components: {
+                list: Components.PlaceGoogleMapLink,
+                show: Components.PlaceGoogleMapLink,
+                edit: Components.PlaceGoogleMapLink,
+              },
+            },
+            created_at: { isVisible: false },
+            updated_at: { isVisible: false },
+          },
+        },
+      },
 
       {
         resource: db.table('shows'),

@@ -8,6 +8,7 @@ import Sequelize from 'sequelize'
 import SequelizeStoreFactory from 'connect-session-sequelize'
 import bcrypt from 'bcryptjs'
 import dotenv from 'dotenv'
+import os from 'os'
 
 import { buildAuthenticatedRouter } from '@adminjs/express'
 import { buildAdminJs } from './adminjs.js'
@@ -19,6 +20,21 @@ const PORT = Number(process.env.PORT || 3001)
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const UPLOAD_DIR = path.join(__dirname, '..', '..', 'Upload')
+
+async function moveFile(tmpAbs, destAbs) {
+  // In some setups, packages still attempt `rename()` under the hood which can fail on Windows
+  // when temp folder is on C: and project is on another drive (EXDEV). Always fall back to copy+unlink.
+  try {
+    await fs.rename(tmpAbs, destAbs)
+    return
+  } catch (e) {
+    if (e?.code !== 'EXDEV') {
+      // for any other rename error, still try copy fallback
+    }
+  }
+  await fs.copyFile(tmpAbs, destAbs)
+  await fs.unlink(tmpAbs).catch(() => {})
+}
 
 /** Same layout as `adminjs` (`ADMIN_JS_TMP_DIR` + `bundle.js`), relative to `process.cwd()` and next to this server. */
 function userComponentsBundlePaths() {
@@ -113,6 +129,8 @@ async function start() {
     formidableMiddleware({
       multiples: true,
       maxFileSize: 4 * 1024 * 1024, // 4MB
+      // Always keep temp on system drive to avoid cross-device rename issues.
+      uploadDir: os.tmpdir(),
     }),
     async (req, res) => {
       try {
@@ -139,9 +157,7 @@ async function start() {
           const destAbs = path.join(UPLOAD_DIR, name)
           const tmp = f?.path
           if (!tmp) return res.status(400).json({ error: 'Invalid upload' })
-          // `rename` fails across drives on Windows (EXDEV). Use copy+unlink to "move".
-          await fs.copyFile(tmp, destAbs)
-          await fs.unlink(tmp).catch(() => {})
+          await moveFile(tmp, destAbs)
 
           saved.push({
             fileName: name,
@@ -159,12 +175,113 @@ async function start() {
     }
   )
 
+  // Upload endpoint for cast image (single)
+  app.post(
+    `${adminJs.options.rootPath}/api/uploads/cast-image`,
+    formidableMiddleware({
+      multiples: false,
+      maxFileSize: 4 * 1024 * 1024, // 4MB
+      uploadDir: os.tmpdir(),
+    }),
+    async (req, res) => {
+      try {
+        const file = req.files?.file ?? req.files?.image ?? req.files?.files ?? null
+        const f = Array.isArray(file) ? file[0] : file
+        if (!f) return res.status(400).json({ error: 'No file uploaded' })
+
+        const type = String(f?.type || '')
+        if (!type.startsWith('image/')) {
+          return res.status(400).json({ error: 'Only image uploads are allowed' })
+        }
+        const size = Number(f?.size || 0)
+        if (size > 4 * 1024 * 1024) {
+          return res.status(400).json({ error: 'File must be <= 4MB' })
+        }
+
+        const castDir = path.join(UPLOAD_DIR, 'cast')
+        await fs.mkdir(castDir, { recursive: true })
+
+        const orig = String(f?.name || 'image')
+        const ext = path.extname(orig).slice(0, 10) || '.jpg'
+        const safeExt = ext.replace(/[^.\w]/g, '')
+        const name = `cast_${Date.now()}_${Math.random().toString(16).slice(2)}${safeExt}`
+        const destAbs = path.join(castDir, name)
+        const tmp = f?.path
+        if (!tmp) return res.status(400).json({ error: 'Invalid upload' })
+        await moveFile(tmp, destAbs)
+
+        res.json({
+          file: {
+            fileName: name,
+            publicUrl: `${adminJs.options.rootPath}/uploads-root/${encodeURIComponent(`cast/${name}`)}`,
+            storedPath: `Upload/cast/${name}`,
+          },
+        })
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('upload error', e)
+        res.status(500).json({ error: e?.message || String(e) })
+      }
+    }
+  )
+
+  // Upload endpoint for country flags (single)
+  app.post(
+    `${adminJs.options.rootPath}/api/uploads/flag-image`,
+    formidableMiddleware({
+      multiples: false,
+      maxFileSize: 4 * 1024 * 1024, // 4MB
+      uploadDir: os.tmpdir(),
+    }),
+    async (req, res) => {
+      try {
+        const file = req.files?.file ?? req.files?.image ?? req.files?.files ?? null
+        const f = Array.isArray(file) ? file[0] : file
+        if (!f) return res.status(400).json({ error: 'No file uploaded' })
+
+        const type = String(f?.type || '')
+        if (!type.startsWith('image/')) {
+          return res.status(400).json({ error: 'Only image uploads are allowed' })
+        }
+        const size = Number(f?.size || 0)
+        if (size > 4 * 1024 * 1024) {
+          return res.status(400).json({ error: 'File must be <= 4MB' })
+        }
+
+        const flagsDir = path.join(UPLOAD_DIR, 'flags')
+        await fs.mkdir(flagsDir, { recursive: true })
+
+        const orig = String(f?.name || 'flag')
+        const ext = path.extname(orig).slice(0, 10) || '.png'
+        const safeExt = ext.replace(/[^.\w]/g, '')
+        const name = `flag_${Date.now()}_${Math.random().toString(16).slice(2)}${safeExt}`
+        const destAbs = path.join(flagsDir, name)
+        const tmp = f?.path
+        if (!tmp) return res.status(400).json({ error: 'Invalid upload' })
+        await moveFile(tmp, destAbs)
+
+        res.json({
+          file: {
+            fileName: name,
+            publicUrl: `${adminJs.options.rootPath}/uploads-root/${encodeURIComponent(`flags/${name}`)}`,
+            storedPath: `Upload/flags/${name}`,
+          },
+        })
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('upload error', e)
+        res.status(500).json({ error: e?.message || String(e) })
+      }
+    }
+  )
+
   // Upload endpoint for promotion image (single)
   app.post(
     `${adminJs.options.rootPath}/api/uploads/promotion-image`,
     formidableMiddleware({
       multiples: false,
       maxFileSize: 4 * 1024 * 1024, // 4MB
+      uploadDir: os.tmpdir(),
     }),
     async (req, res) => {
       try {
@@ -188,9 +305,7 @@ async function start() {
         const destAbs = path.join(UPLOAD_DIR, name)
         const tmp = f?.path
         if (!tmp) return res.status(400).json({ error: 'Invalid upload' })
-        // `rename` fails across drives on Windows (EXDEV). Use copy+unlink to "move".
-        await fs.copyFile(tmp, destAbs)
-        await fs.unlink(tmp).catch(() => {})
+        await moveFile(tmp, destAbs)
 
         res.json({
           file: {
@@ -240,6 +355,7 @@ async function start() {
   )
 
   app.use(adminJs.options.rootPath, adminRouter)
+  app.use(`${adminJs.options.rootPath}/assets`, express.static(path.join(__dirname, '..', 'public', 'assets')))
   app.use(`${adminJs.options.rootPath}/uploads`, express.static(path.join(__dirname, '..', 'public', 'uploads')))
 
   app.get('/', (_req, res) => res.redirect(adminJs.options.rootPath))
