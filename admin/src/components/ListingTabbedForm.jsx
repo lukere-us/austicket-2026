@@ -238,26 +238,63 @@ function normalizeShowPayload(
 	};
 }
 
-function isSqlDateTime(s) {
-	return typeof s === "string" && /^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/.test(s.trim());
+function isSqlDateTime(
+	s,
+) {
+	return (
+		typeof s ===
+			"string" &&
+		/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/.test(
+			s.trim(),
+		)
+	);
 }
 
 /** AdminJS / MySQL often return ISO (`YYYY-MM-DDTHH:mm:ss.sssZ`) or fractional seconds — normalize for validation + save. */
-function normalizeListingDatetime(value) {
-	const raw = String(value ?? "").trim();
-	if (!raw) return "";
+function normalizeListingDatetime(
+	value,
+) {
+	const raw =
+		String(
+			value ??
+				"",
+		).trim();
+	if (
+		!raw
+	)
+		return "";
 
-	if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/.test(raw)) return raw;
+	if (
+		/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/.test(
+			raw,
+		)
+	)
+		return raw;
 
-	let m = raw.match(/^(\d{4}-\d{2}-\d{2})[\sT](\d{2}:\d{2}:\d{2})\.\d+/);
-	if (m) return `${m[1]} ${m[2]}`;
+	let m =
+		raw.match(
+			/^(\d{4}-\d{2}-\d{2})[\sT](\d{2}:\d{2}:\d{2})\.\d+/,
+		);
+	if (
+		m
+	)
+		return `${m[1]} ${m[2]}`;
 
-	m = raw.match(
-		/^(\d{4}-\d{2}-\d{2})[\sT](\d{2}:\d{2}:\d{2})(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/i,
-	);
-	if (m) return `${m[1]} ${m[2]}`;
+	m =
+		raw.match(
+			/^(\d{4}-\d{2}-\d{2})[\sT](\d{2}:\d{2}:\d{2})(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/i,
+		);
+	if (
+		m
+	)
+		return `${m[1]} ${m[2]}`;
 
-	if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return `${raw} 00:00:00`;
+	if (
+		/^\d{4}-\d{2}-\d{2}$/.test(
+			raw,
+		)
+	)
+		return `${raw} 00:00:00`;
 
 	return "";
 }
@@ -324,38 +361,86 @@ function parseShowBoundaryDate(
 		: undefined;
 }
 
-function normalizeShowsPayloadForSave(showsPayload) {
-	const shows = Array.isArray(showsPayload?.shows) ? showsPayload.shows : [];
+function normalizeShowsPayloadForSave(
+	showsPayload,
+) {
+	const shows =
+		Array.isArray(
+			showsPayload?.shows,
+		)
+			? showsPayload.shows
+			: [];
 	return {
-		shows: shows.map((s) => ({
-			...s,
-			start_date:
-				extractShowCalendarYmd(
-					s.start_date,
-				) ||
-				"",
-			end_date:
-				extractShowCalendarYmd(
-					s.end_date,
-				) ||
-				"",
-			publish_at: normalizeListingDatetime(s.publish_at) || "",
-			unpublish_at: normalizeListingDatetime(s.unpublish_at) || "",
-			times: Array.isArray(s.times)
-				? s.times.map((t) => ({
-						...t,
-						show_time: normalizeListingDatetime(t.show_time) || "",
-					}))
-				: [],
-		})),
+		shows:
+			shows.map(
+				(
+					s,
+				) => ({
+					...s,
+					start_date:
+						extractShowCalendarYmd(
+							s.start_date,
+						) ||
+						"",
+					end_date:
+						extractShowCalendarYmd(
+							s.end_date,
+						) ||
+						"",
+					publish_at:
+						normalizeListingDatetime(
+							s.publish_at,
+						) ||
+						"",
+					unpublish_at:
+						normalizeListingDatetime(
+							s.unpublish_at,
+						) ||
+						"",
+					times:
+						Array.isArray(
+							s.times,
+						)
+							? s.times.map(
+									(
+										t,
+									) => ({
+										...t,
+										show_time:
+											normalizeListingDatetime(
+												t.show_time,
+											) ||
+											"",
+									}),
+								)
+							: [],
+				}),
+			),
 	};
 }
 
-function validateShowsPayload(showsPayload) {
-	const errs = [];
-	const shows = Array.isArray(showsPayload?.shows) ? showsPayload.shows : [];
-	for (let i = 0; i < shows.length; i += 1) {
-		const s = shows[i] || {};
+function validateShowsPayload(
+	showsPayload,
+) {
+	const errs =
+		[];
+	const shows =
+		Array.isArray(
+			showsPayload?.shows,
+		)
+			? showsPayload.shows
+			: [];
+	for (
+		let i = 0;
+		i <
+		shows.length;
+		i += 1
+	) {
+		const s =
+			shows[
+				i
+			] ||
+			{};
 		const label = `Show #${i + 1}`;
 
 		const startYmd =
@@ -372,32 +457,93 @@ function validateShowsPayload(showsPayload) {
 			endYmd <
 				startYmd
 		) {
-			errs.push(`${label}: Start date must be <= End date.`);
+			errs.push(
+				`${label}: Start date must be <= End date.`,
+			);
 		}
 
-		const pubRaw = String(s.publish_at || "").trim();
-		const unpubRaw = String(s.unpublish_at || "").trim();
-		const pubNorm = normalizeListingDatetime(s.publish_at);
-		const unpubNorm = normalizeListingDatetime(s.unpublish_at);
+		const pubRaw =
+			String(
+				s.publish_at ||
+					"",
+			).trim();
+		const unpubRaw =
+			String(
+				s.unpublish_at ||
+					"",
+			).trim();
+		const pubNorm =
+			normalizeListingDatetime(
+				s.publish_at,
+			);
+		const unpubNorm =
+			normalizeListingDatetime(
+				s.unpublish_at,
+			);
 
-		if (pubRaw && !pubNorm) {
-			errs.push(`${label}: Publish at is invalid.`);
+		if (
+			pubRaw &&
+			!pubNorm
+		) {
+			errs.push(
+				`${label}: Publish at is invalid.`,
+			);
 		}
-		if (unpubRaw && !unpubNorm) {
-			errs.push(`${label}: Unpublish at is invalid.`);
+		if (
+			unpubRaw &&
+			!unpubNorm
+		) {
+			errs.push(
+				`${label}: Unpublish at is invalid.`,
+			);
 		}
-		if (pubNorm && unpubNorm && unpubNorm < pubNorm) {
-			errs.push(`${label}: Unpublish at must be >= Publish at.`);
+		if (
+			pubNorm &&
+			unpubNorm &&
+			unpubNorm <
+				pubNorm
+		) {
+			errs.push(
+				`${label}: Unpublish at must be >= Publish at.`,
+			);
 		}
 
-		const times = Array.isArray(s.times) ? s.times : [];
-		for (let j = 0; j < times.length; j += 1) {
-			const t = times[j] || {};
-			const stRaw = String(t.show_time || "").trim();
-			if (!stRaw) continue;
-			const stNorm = normalizeListingDatetime(t.show_time);
-			if (!stNorm) {
-				errs.push(`${label}: Time #${j + 1} is invalid.`);
+		const times =
+			Array.isArray(
+				s.times,
+			)
+				? s.times
+				: [];
+		for (
+			let j = 0;
+			j <
+			times.length;
+			j += 1
+		) {
+			const t =
+				times[
+					j
+				] ||
+				{};
+			const stRaw =
+				String(
+					t.show_time ||
+						"",
+				).trim();
+			if (
+				!stRaw
+			)
+				continue;
+			const stNorm =
+				normalizeListingDatetime(
+					t.show_time,
+				);
+			if (
+				!stNorm
+			) {
+				errs.push(
+					`${label}: Time #${j + 1} is invalid.`,
+				);
 			}
 		}
 	}
@@ -446,7 +592,9 @@ function extractAdminRecordId(
 		return "";
 	const raw =
 		rec.id ??
-		rec.params?.id;
+		rec
+			.params
+			?.id;
 	if (
 		raw !=
 			null &&
@@ -533,18 +681,17 @@ async function resolveCastIdAfterCreate(
 	const mid =
 		extractAdminRecordId(
 			match ||
-				records[
-					0
-				],
+				records[0],
 		);
-	return mid ||
-		"";
+	return (
+		mid ||
+		""
+	);
 }
 
 function emptyCastDraft() {
 	return {
-		name:
-			"",
+		name: "",
 		position:
 			"",
 		description:
@@ -560,9 +707,17 @@ function emptyCastDraft() {
 	};
 }
 
-function normalizeNameKey(value) {
-	return String(value ?? "")
-		.replace(/\s+/g, " ")
+function normalizeNameKey(
+	value,
+) {
+	return String(
+		value ??
+			"",
+	)
+		.replace(
+			/\s+/g,
+			" ",
+		)
 		.trim()
 		.toLowerCase();
 }
@@ -681,8 +836,7 @@ function ListingAddCastModal(
 		if (
 			!nameKeyLive
 		) {
-			duplicateCheckSeqRef.current +=
-				1;
+			duplicateCheckSeqRef.current += 1;
 			setDuplicateFromApi(
 				false,
 			);
@@ -774,8 +928,7 @@ function ListingAddCastModal(
 			clearTimeout(
 				t,
 			);
-			duplicateCheckSeqRef.current +=
-				1;
+			duplicateCheckSeqRef.current += 1;
 		};
 	}, [
 		isOpen,
@@ -824,40 +977,41 @@ function ListingAddCastModal(
 								"casts",
 							actionName:
 								"new",
-							data:
-								{
-									name,
-									position,
-									description:
-										String(
-											draft.description ||
-												"",
-										).trim(),
-									facebook_url:
-										String(
-											draft.facebook_url ||
-												"",
-										).trim(),
-									tiktok_url:
-										String(
-											draft.tiktok_url ||
-												"",
-										).trim(),
-									instagram_url:
-										String(
-											draft.instagram_url ||
-												"",
-										).trim(),
-									wikipedia_url:
-										String(
-											draft.wikipedia_url ||
-												"",
-										).trim(),
-								},
+							data: {
+								name,
+								position,
+								description:
+									String(
+										draft.description ||
+											"",
+									).trim(),
+								facebook_url:
+									String(
+										draft.facebook_url ||
+											"",
+									).trim(),
+								tiktok_url:
+									String(
+										draft.tiktok_url ||
+											"",
+									).trim(),
+								instagram_url:
+									String(
+										draft.instagram_url ||
+											"",
+									).trim(),
+								wikipedia_url:
+									String(
+										draft.wikipedia_url ||
+											"",
+									).trim(),
+							},
 						},
 					);
 				const notice =
-					res?.data?.notice;
+					res
+						?.data
+						?.notice;
 				if (
 					notice?.type ===
 					"error"
@@ -868,7 +1022,9 @@ function ListingAddCastModal(
 					return;
 				}
 				const rec =
-					res?.data?.record;
+					res
+						?.data
+						?.record;
 				const errObj =
 					rec?.errors &&
 					typeof rec.errors ===
@@ -882,7 +1038,8 @@ function ListingAddCastModal(
 					errObj &&
 					Object.keys(
 						errObj,
-					).length >
+					)
+						.length >
 						0
 				) {
 					let msg =
@@ -942,8 +1099,7 @@ function ListingAddCastModal(
 					);
 					return;
 				}
-				const label =
-					`${name} — ${position}`;
+				const label = `${name} — ${position}`;
 				onCastCreated(
 					{
 						id: newId,
@@ -1023,7 +1179,15 @@ function ListingAddCastModal(
 						color="warning"
 						mt="sm"
 					>
-						This cast name already exists. Please double-check before saving.
+						This
+						cast
+						name
+						already
+						exists.
+						Please
+						double-check
+						before
+						saving.
 					</Text>
 				) : checkingDuplicate &&
 				  nameKeyLive ? (
@@ -1032,7 +1196,8 @@ function ListingAddCastModal(
 						color="grey60"
 						mt="sm"
 					>
-						Checking duplicates…
+						Checking
+						duplicates…
 					</Text>
 				) : null}
 			</Box>
@@ -1052,9 +1217,10 @@ function ListingAddCastModal(
 								prev,
 							) => ({
 								...prev,
-								position: e
-									.target
-									.value,
+								position:
+									e
+										.target
+										.value,
 							}),
 						)
 					}
@@ -1080,9 +1246,10 @@ function ListingAddCastModal(
 								prev,
 							) => ({
 								...prev,
-								description: e
-									.target
-									.value,
+								description:
+									e
+										.target
+										.value,
 							}),
 						)
 					}
@@ -1093,7 +1260,8 @@ function ListingAddCastModal(
 						saving
 					}
 					style={{
-						width: "100%",
+						width:
+							"100%",
 					}}
 				/>
 			</Box>
@@ -1115,9 +1283,10 @@ function ListingAddCastModal(
 								prev,
 							) => ({
 								...prev,
-								facebook_url: e
-									.target
-									.value,
+								facebook_url:
+									e
+										.target
+										.value,
 							}),
 						)
 					}
@@ -1144,9 +1313,10 @@ function ListingAddCastModal(
 								prev,
 							) => ({
 								...prev,
-								instagram_url: e
-									.target
-									.value,
+								instagram_url:
+									e
+										.target
+										.value,
 							}),
 						)
 					}
@@ -1173,9 +1343,10 @@ function ListingAddCastModal(
 								prev,
 							) => ({
 								...prev,
-								tiktok_url: e
-									.target
-									.value,
+								tiktok_url:
+									e
+										.target
+										.value,
 							}),
 						)
 					}
@@ -1202,9 +1373,10 @@ function ListingAddCastModal(
 								prev,
 							) => ({
 								...prev,
-								wikipedia_url: e
-									.target
-									.value,
+								wikipedia_url:
+									e
+										.target
+										.value,
 							}),
 						)
 					}
@@ -1303,7 +1475,7 @@ function ListingAddPlaceModal(
 	const pairReady =
 		Boolean(
 			nameKeyLive &&
-				cityIdStr,
+			cityIdStr,
 		);
 
 	useEffect(() => {
@@ -1312,8 +1484,7 @@ function ListingAddPlaceModal(
 		) {
 			return;
 		}
-		duplicateCheckSeqRef.current +=
-			1;
+		duplicateCheckSeqRef.current += 1;
 		setDuplicateFromApi(
 			false,
 		);
@@ -1333,8 +1504,7 @@ function ListingAddPlaceModal(
 		if (
 			!pairReady
 		) {
-			duplicateCheckSeqRef.current +=
-				1;
+			duplicateCheckSeqRef.current += 1;
 			setDuplicateFromApi(
 				false,
 			);
@@ -1435,8 +1605,7 @@ function ListingAddPlaceModal(
 			clearTimeout(
 				t,
 			);
-			duplicateCheckSeqRef.current +=
-				1;
+			duplicateCheckSeqRef.current += 1;
 		};
 	}, [
 		isOpen,
@@ -1494,7 +1663,21 @@ function ListingAddPlaceModal(
 						color="warning"
 						mt="sm"
 					>
-						A place with this name already exists in the selected city. Please double-check before saving.
+						A
+						place
+						with
+						this
+						name
+						already
+						exists
+						in
+						the
+						selected
+						city.
+						Please
+						double-check
+						before
+						saving.
 					</Text>
 				) : checkingDuplicate &&
 				  pairReady ? (
@@ -1503,7 +1686,8 @@ function ListingAddPlaceModal(
 						color="grey60"
 						mt="sm"
 					>
-						Checking duplicates…
+						Checking
+						duplicates…
 					</Text>
 				) : nameKeyLive &&
 				  !cityIdStr ? (
@@ -1512,7 +1696,15 @@ function ListingAddPlaceModal(
 						color="grey60"
 						mt="sm"
 					>
-						Select a city to check for duplicate place names.
+						Select
+						a
+						city
+						to
+						check
+						for
+						duplicate
+						place
+						names.
 					</Text>
 				) : null}
 			</Box>
@@ -1578,9 +1770,10 @@ function ListingAddPlaceModal(
 								prev,
 							) => ({
 								...prev,
-								address: e
-									.target
-									.value,
+								address:
+									e
+										.target
+										.value,
 							}),
 						)
 					}
@@ -1608,9 +1801,10 @@ function ListingAddPlaceModal(
 								prev,
 							) => ({
 								...prev,
-								google_map_link: e
-									.target
-									.value,
+								google_map_link:
+									e
+										.target
+										.value,
 							}),
 						)
 					}
@@ -1787,8 +1981,7 @@ export default function ListingTabbedForm(
 	] =
 		useState(
 			{
-				name:
-					"",
+				name: "",
 				city_id:
 					"",
 				address:
@@ -3126,8 +3319,7 @@ export default function ListingTabbedForm(
 			);
 			setNewPlaceDraft(
 				{
-					name:
-						"",
+					name: "",
 					city_id:
 						"",
 					address:
@@ -3147,8 +3339,7 @@ export default function ListingTabbedForm(
 			);
 			setNewPlaceDraft(
 				{
-					name:
-						"",
+					name: "",
 					city_id:
 						"",
 					address:
@@ -3198,26 +3389,27 @@ export default function ListingTabbedForm(
 								"places",
 							actionName:
 								"new",
-							data:
-								{
-									name,
-									city_id:
-										cityId,
-									address:
-										String(
-											newPlaceDraft.address ||
-												"",
-										).trim(),
-									google_map_link:
-										String(
-											newPlaceDraft.google_map_link ||
-												"",
-										).trim(),
-								},
+							data: {
+								name,
+								city_id:
+									cityId,
+								address:
+									String(
+										newPlaceDraft.address ||
+											"",
+									).trim(),
+								google_map_link:
+									String(
+										newPlaceDraft.google_map_link ||
+											"",
+									).trim(),
+							},
 						},
 					);
 				const notice =
-					res?.data?.notice;
+					res
+						?.data
+						?.notice;
 				if (
 					notice?.type ===
 					"error"
@@ -3228,7 +3420,9 @@ export default function ListingTabbedForm(
 					return;
 				}
 				const rec =
-					res?.data?.record;
+					res
+						?.data
+						?.record;
 				const errObj =
 					rec?.errors &&
 					typeof rec.errors ===
@@ -3242,7 +3436,8 @@ export default function ListingTabbedForm(
 					errObj &&
 					Object.keys(
 						errObj,
-					).length >
+					)
+						.length >
 						0
 				) {
 					let msg =
@@ -3285,7 +3480,9 @@ export default function ListingTabbedForm(
 				}
 				const newIdRaw =
 					rec?.id ??
-					rec?.params?.id;
+					rec
+						?.params
+						?.id;
 				const newId =
 					newIdRaw !=
 					null
@@ -3364,9 +3561,7 @@ export default function ListingTabbedForm(
 						prev,
 					) => ({
 						...prev,
-						[
-							newId
-						]:
+						[newId]:
 							{
 								google_map_link:
 									mapLink,
@@ -3375,7 +3570,7 @@ export default function ListingTabbedForm(
 				);
 				if (
 					placeModalShowIdx !=
-						null
+					null
 				) {
 					updateShow(
 						placeModalShowIdx,
@@ -3411,12 +3606,10 @@ export default function ListingTabbedForm(
 
 	const handleCastCreated =
 		useCallback(
-			(
-				{
-					id,
-					label,
-				},
-			) => {
+			({
+				id,
+				label,
+			}) => {
 				const newId =
 					String(
 						id,
@@ -3646,13 +3839,23 @@ export default function ListingTabbedForm(
 				true,
 			);
 			try {
-				const showErrs = validateShowsPayload(showsPayload);
-				if (showErrs.length) {
-					sendNoticeRef.current?.({
-						type: "error",
-						message: showErrs[0],
-					});
-					setIsSaving(false);
+				const showErrs =
+					validateShowsPayload(
+						showsPayload,
+					);
+				if (
+					showErrs.length
+				) {
+					sendNoticeRef.current?.(
+						{
+							type: "error",
+							message:
+								showErrs[0],
+						},
+					);
+					setIsSaving(
+						false,
+					);
 					return;
 				}
 				const showsPayloadNormalized =
@@ -3954,7 +4157,9 @@ export default function ListingTabbedForm(
 							flexWrap="nowrap"
 						>
 							<Box
-								flex={1}
+								flex={
+									1
+								}
 								style={{
 									minWidth: 0,
 								}}
@@ -4015,7 +4220,9 @@ export default function ListingTabbedForm(
 							>
 								<Icon
 									icon="Plus"
-									size={22}
+									size={
+										22
+									}
 								/>
 							</Button>
 						</Box>
@@ -4408,7 +4615,9 @@ export default function ListingTabbedForm(
 													flexWrap="nowrap"
 												>
 													<Box
-														flex={1}
+														flex={
+															1
+														}
 														style={{
 															minWidth: 0,
 														}}
@@ -4465,7 +4674,9 @@ export default function ListingTabbedForm(
 													>
 														<Icon
 															icon="Plus"
-															size={22}
+															size={
+																22
+															}
 														/>
 													</Button>
 												</Box>
@@ -4546,19 +4757,14 @@ export default function ListingTabbedForm(
 													</Label>
 													<DatePicker
 														propertyType="date"
-														value={
-															showDateToPickerIso(
-																s.start_date,
-															)
-														}
-														maxDate={
-															parseShowBoundaryDate(
-																s.end_date,
-															)
-														}
+														value={showDateToPickerIso(
+															s.start_date,
+														)}
+														maxDate={parseShowBoundaryDate(
+															s.end_date,
+														)}
 														style={{
-															maxWidth:
-																300,
+															maxWidth: 300,
 															width:
 																"100%",
 														}}
@@ -4587,19 +4793,14 @@ export default function ListingTabbedForm(
 													</Label>
 													<DatePicker
 														propertyType="date"
-														value={
-															showDateToPickerIso(
-																s.end_date,
-															)
-														}
-														minDate={
-															parseShowBoundaryDate(
-																s.start_date,
-															)
-														}
+														value={showDateToPickerIso(
+															s.end_date,
+														)}
+														minDate={parseShowBoundaryDate(
+															s.start_date,
+														)}
 														style={{
-															maxWidth:
-																300,
+															maxWidth: 300,
 															width:
 																"100%",
 														}}
@@ -4636,19 +4837,14 @@ export default function ListingTabbedForm(
 													</Label>
 													<DatePicker
 														propertyType="date"
-														value={
-															showDateToPickerIso(
-																s.publish_at,
-															)
-														}
-													maxDate={
-														parseShowBoundaryDate(
+														value={showDateToPickerIso(
+															s.publish_at,
+														)}
+														maxDate={parseShowBoundaryDate(
 															s.unpublish_at,
-														)
-													}
+														)}
 														style={{
-															maxWidth:
-																300,
+															maxWidth: 300,
 															width:
 																"100%",
 														}}
@@ -4661,12 +4857,11 @@ export default function ListingTabbedForm(
 																iso
 																	? String(
 																			iso,
-																		)
-																			.slice(
-																				0,
-																				10,
-																			) +
-																		" 00:00:00"
+																		).slice(
+																			0,
+																			10,
+																		) +
+																			" 00:00:00"
 																	: "",
 															)
 														}
@@ -4679,19 +4874,14 @@ export default function ListingTabbedForm(
 													</Label>
 													<DatePicker
 														propertyType="date"
-														value={
-															showDateToPickerIso(
-																s.unpublish_at,
-															)
-														}
-													minDate={
-														parseShowBoundaryDate(
+														value={showDateToPickerIso(
+															s.unpublish_at,
+														)}
+														minDate={parseShowBoundaryDate(
 															s.publish_at,
-														)
-													}
+														)}
 														style={{
-															maxWidth:
-																300,
+															maxWidth: 300,
 															width:
 																"100%",
 														}}
@@ -4704,12 +4894,11 @@ export default function ListingTabbedForm(
 																iso
 																	? String(
 																			iso,
-																		)
-																			.slice(
-																				0,
-																				10,
-																			) +
-																		" 00:00:00"
+																		).slice(
+																			0,
+																			10,
+																		) +
+																			" 00:00:00"
 																	: "",
 															)
 														}
@@ -4889,9 +5078,9 @@ export default function ListingTabbedForm(
 																		);
 																	}}
 																	style={{
-																		maxWidth:
-																			300,
-																		width: "100%",
+																		maxWidth: 300,
+																		width:
+																			"100%",
 																	}}
 																/>
 															</Box>

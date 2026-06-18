@@ -357,7 +357,7 @@ export async function buildAdminJs() {
     const safeRoot = sourceSlug.length <= 180 ? sourceSlug : sourceSlug.slice(0, 180)
     let candidate = `${safeRoot}-copy`
     let n = 2
-    for (;;) {
+    for (; ;) {
       const slug = candidate.length > maxLen ? candidate.slice(0, maxLen) : candidate
       const [rows] = await conn.execute(`SELECT id FROM listings WHERE slug = ? LIMIT 1`, [slug])
       if (!Array.isArray(rows) || rows.length === 0) return slug

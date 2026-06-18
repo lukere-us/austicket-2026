@@ -144,6 +144,117 @@ function read_user_agent(): ?string
   return $_SERVER['HTTP_USER_AGENT'] ?? null;
 }
 
+function normalize_country_name(?string $raw): ?string
+{
+  $c = strtoupper(trim((string)$raw));
+  if ($c === '') return null;
+  if (in_array($c, ['AU', 'AUS', 'AUSTRALIA', '1'], true)) return 'Australia';
+  if (in_array($c, ['NZ', 'NZL', 'NEW ZEALAND', '2'], true)) return 'New Zealand';
+  return null;
+}
+
+function listing_country_exists_sql(string $countryParam): string
+{
+  return "
+    EXISTS (
+      SELECT 1
+      FROM shows s
+      JOIN places p ON p.id = s.place_id
+      JOIN cities c ON c.id = p.city_id
+      JOIN states st ON st.id = c.state_id
+      JOIN countries co ON co.id = st.country_id
+      WHERE s.listing_id = l.id
+        AND co.name = $countryParam
+    )
+  ";
+}
+
+function listing_city_exists_sql(string $cityParam): string
+{
+  return "
+    EXISTS (
+      SELECT 1
+      FROM shows s
+      JOIN places p ON p.id = s.place_id
+      JOIN cities c ON c.id = p.city_id
+      WHERE s.listing_id = l.id
+        AND c.name = $cityParam
+    )
+  ";
+}
+
+function listing_visible_where(): array
+{
+  return [
+    "l.status = 'published'",
+    "(l.publish_at IS NULL OR l.publish_at <= UTC_TIMESTAMP())",
+    "(l.unpublish_at IS NULL OR l.unpublish_at > UTC_TIMESTAMP())",
+  ];
+}
+
+function active_show_sql(string $alias = 's'): string
+{
+  // Show-level publish windows were removed from the schema; listing schedule is authoritative.
+  return '1=1';
+}
+
+function listing_card_select_sql(): string
+{
+  $activeSh = active_show_sql('sh');
+  return "
+    l.id, l.title, l.slug, l.banner_image, l.trailer_url, l.publish_at, l.created_at,
+    COALESCE(l.is_featured, 0) AS is_featured,
+    t.name AS type_name, t.slug AS type_slug,
+    (
+      SELECT COALESCE(
+        (
+          SELECT MIN(st.show_time)
+          FROM show_times st
+          JOIN shows sh ON sh.id = st.show_id
+          WHERE sh.listing_id = l.id AND $activeSh
+        ),
+        (
+          SELECT MIN(sh.start_date)
+          FROM shows sh
+          WHERE sh.listing_id = l.id AND $activeSh
+        )
+      )
+    ) AS event_date,
+    (
+      SELECT CONCAT(p.name, ', ', c.name)
+      FROM shows sh
+      JOIN places p ON p.id = sh.place_id
+      JOIN cities c ON c.id = p.city_id
+      WHERE sh.listing_id = l.id AND $activeSh
+      ORDER BY COALESCE(sh.start_date, '9999-12-31') ASC, sh.id ASC
+      LIMIT 1
+    ) AS event_location,
+    (
+      SELECT sh.booking_url
+      FROM shows sh
+      WHERE sh.listing_id = l.id AND $activeSh AND sh.booking_url IS NOT NULL AND sh.booking_url <> ''
+      ORDER BY COALESCE(sh.start_date, '9999-12-31') ASC, sh.id ASC
+      LIMIT 1
+    ) AS booking_url
+  ";
+}
+
+function fetch_listing_cards(PDO $pdo, array $extraWhere, array $params, string $orderBy, int $limit): array
+{
+  $where = array_merge(listing_visible_where(), $extraWhere);
+  $sql = "
+    SELECT " . listing_card_select_sql() . "
+    FROM listings l
+    JOIN types t ON t.id = l.type_id
+    WHERE " . implode(' AND ', $where) . "
+    ORDER BY $orderBy
+    LIMIT $limit
+  ";
+  $stmt = $pdo->prepare($sql);
+  $stmt->execute($params);
+  return $stmt->fetchAll() ?: [];
+}
+
 // -------------------------
 // Routes
 // -------------------------
@@ -152,20 +263,57 @@ if ($method === 'GET' && $path === '/') {
   json_response(['name' => 'aus-ticket-lanka-api', 'status' => 'ok']);
 }
 
+// Public: cities with published listings (optionally scoped to country)
+if ($method === 'GET' && $path === '/cities') {
+  $pdo = db();
+  $params = [];
+  $where = listing_visible_where();
+
+  $countryName = normalize_country_name($_GET['country'] ?? null);
+  if ($countryName !== null) {
+    $where[] = 'co.name = :country_name';
+    $params[':country_name'] = $countryName;
+  }
+
+  $sql = "
+    SELECT DISTINCT c.id, c.name
+    FROM cities c
+    JOIN states st ON st.id = c.state_id
+    JOIN countries co ON co.id = st.country_id
+    JOIN places p ON p.city_id = c.id
+    JOIN shows s ON s.place_id = p.id
+    JOIN listings l ON l.id = s.listing_id
+    WHERE " . implode(' AND ', $where) . "
+    ORDER BY c.name ASC
+  ";
+
+  $stmt = $pdo->prepare($sql);
+  $stmt->execute($params);
+  $rows = $stmt->fetchAll();
+
+  json_response(['items' => $rows]);
+}
+
 // Public: list listings
 if ($method === 'GET' && $path === '/listings') {
   $pdo = db();
   $params = [];
-  $where = [];
-
-  // Only published and within publish window
-  $where[] = "l.status = 'published'";
-  $where[] = "(l.publish_at IS NULL OR l.publish_at <= UTC_TIMESTAMP())";
-  $where[] = "(l.unpublish_at IS NULL OR l.unpublish_at > UTC_TIMESTAMP())";
+  $where = listing_visible_where();
 
   if (!empty($_GET['type'])) {
     $where[] = 't.slug = :type_slug';
     $params[':type_slug'] = (string)$_GET['type'];
+  }
+
+  if (!empty($_GET['city'])) {
+    $where[] = listing_city_exists_sql(':city_name');
+    $params[':city_name'] = (string)$_GET['city'];
+  }
+
+  $countryName = normalize_country_name($_GET['country'] ?? null);
+  if ($countryName !== null) {
+    $where[] = listing_country_exists_sql(':country_name');
+    $params[':country_name'] = $countryName;
   }
 
   $sql = "
@@ -174,7 +322,7 @@ if ($method === 'GET' && $path === '/listings') {
       t.name AS type_name, t.slug AS type_slug
     FROM listings l
     JOIN types t ON t.id = l.type_id
-    " . (count($where) ? ('WHERE ' . implode(' AND ', $where)) : '') . "
+    WHERE " . implode(' AND ', $where) . "
     ORDER BY COALESCE(l.publish_at, l.created_at) DESC
     LIMIT 100
   ";
@@ -186,9 +334,92 @@ if ($method === 'GET' && $path === '/listings') {
   json_response(['items' => $rows]);
 }
 
+// Public: featured listings for homepage carousel
+if ($method === 'GET' && $path === '/listings/featured') {
+  $pdo = db();
+  $params = [];
+  $extra = [];
+
+  $countryName = normalize_country_name($_GET['country'] ?? null);
+  if ($countryName !== null) {
+    $extra[] = listing_country_exists_sql(':country_name');
+    $params[':country_name'] = $countryName;
+  }
+
+  if (!empty($_GET['city'])) {
+    $extra[] = listing_city_exists_sql(':city_name');
+    $params[':city_name'] = (string)$_GET['city'];
+  }
+
+  $featuredWhere = array_merge($extra, ['COALESCE(l.is_featured, 0) = 1']);
+  $featured = fetch_listing_cards($pdo, $featuredWhere, $params, 'COALESCE(l.publish_at, l.created_at) DESC', 6);
+
+  if (count($featured) === 0) {
+    $featured = fetch_listing_cards($pdo, $extra, $params, 'l.created_at DESC', 6);
+  }
+
+  json_response(['items' => $featured, 'featured_only' => count($featured) > 0 && (int)($featured[0]['is_featured'] ?? 0) === 1]);
+}
+
+// Public: AJAX search suggestions
+if ($method === 'GET' && $path === '/listings/search') {
+  $pdo = db();
+  $q = trim((string)($_GET['q'] ?? ''));
+  $limit = min(5, max(1, (int)($_GET['limit'] ?? 5)));
+
+  if ($q === '') {
+    json_response(['items' => []]);
+  }
+
+  $qLower = mb_strtolower($q, 'UTF-8');
+  $like = '%' . $qLower . '%';
+  $params = [
+    ':q_title' => $like,
+    ':q_type' => $like,
+    ':q_desc' => $like,
+    ':q_place' => $like,
+    ':q_city' => $like,
+    ':q_state' => $like,
+    ':q_address' => $like,
+  ];
+  $extra = [];
+  $countryName = normalize_country_name($_GET['country'] ?? null);
+  if ($countryName !== null) {
+    $extra[] = listing_country_exists_sql(':country_name');
+    $params[':country_name'] = $countryName;
+  }
+
+  if (!empty($_GET['city'])) {
+    $extra[] = listing_city_exists_sql(':city_name');
+    $params[':city_name'] = (string)$_GET['city'];
+  }
+
+  $active = active_show_sql('s');
+  $extra[] = "(
+    LOWER(l.title) LIKE :q_title OR
+    LOWER(t.name) LIKE :q_type OR
+    LOWER(l.description_html) LIKE :q_desc OR
+    EXISTS (
+      SELECT 1
+      FROM shows s
+      JOIN places p ON p.id = s.place_id
+      JOIN cities c ON c.id = p.city_id
+      JOIN states st ON st.id = c.state_id
+      WHERE s.listing_id = l.id AND $active
+        AND (LOWER(p.name) LIKE :q_place OR LOWER(c.name) LIKE :q_city OR LOWER(st.name) LIKE :q_state OR LOWER(p.address) LIKE :q_address)
+    )
+  )";
+
+  $items = fetch_listing_cards($pdo, $extra, $params, 'COALESCE(l.publish_at, l.created_at) DESC', $limit);
+  json_response(['items' => $items]);
+}
+
 // Public: listing detail
 if ($method === 'GET' && preg_match('#^/listings/([^/]+)$#', $path, $m)) {
   $slug = $m[1];
+  if ($slug === 'featured' || $slug === 'search') {
+    json_response(['error' => 'not_found'], 404);
+  }
   $pdo = db();
 
   $stmt = $pdo->prepare("
@@ -213,6 +444,13 @@ if ($method === 'GET' && preg_match('#^/listings/([^/]+)$#', $path, $m)) {
   $stmt->execute([':id' => $listing['id']]);
   $gallery = $stmt->fetchAll();
 
+  $countryName = normalize_country_name($_GET['country'] ?? null);
+  $showCountrySql = $countryName !== null ? 'AND co.name = :country_name' : '';
+  $showParams = [':id' => $listing['id']];
+  if ($countryName !== null) {
+    $showParams[':country_name'] = $countryName;
+  }
+
   $stmt = $pdo->prepare("
     SELECT
       s.*,
@@ -226,11 +464,10 @@ if ($method === 'GET' && preg_match('#^/listings/([^/]+)$#', $path, $m)) {
     JOIN states st ON st.id = c.state_id
     JOIN countries co ON co.id = st.country_id
     WHERE s.listing_id = :id
-      AND (s.publish_at IS NULL OR s.publish_at <= UTC_TIMESTAMP())
-      AND (s.unpublish_at IS NULL OR s.unpublish_at > UTC_TIMESTAMP())
+      $showCountrySql
     ORDER BY s.start_date ASC, s.id ASC
   ");
-  $stmt->execute([':id' => $listing['id']]);
+  $stmt->execute($showParams);
   $shows = $stmt->fetchAll();
 
   if (count($shows)) {
