@@ -70,6 +70,14 @@ export async function buildAdminJs() {
       'DashboardTiles',
       path.join(__dirname, 'components', 'DashboardTiles.jsx')
     ),
+    SliderBannerSettings: componentLoader.add(
+      'SliderBannerSettings',
+      path.join(__dirname, 'components', 'SliderBannerSettings.jsx')
+    ),
+    HomeListingsSettings: componentLoader.add(
+      'HomeListingsSettings',
+      path.join(__dirname, 'components', 'HomeListingsSettings.jsx')
+    ),
   }
 
   const databaseName = process.env.DB_NAME || 'aus-booking'
@@ -505,6 +513,20 @@ export async function buildAdminJs() {
       companyName: 'AUS Ticket Lanka',
       softwareBrothers: false,
     },
+    locale: {
+      language: 'en',
+      translations: {
+        en: {
+          labels: {
+            pages: 'Site settings',
+          },
+          pages: {
+            sliderBanner: 'Slider & Banner',
+            homeListings: 'Homepage listings',
+          },
+        },
+      },
+    },
     assets: {
       styles: ['/admin/assets/admin-custom.css'],
     },
@@ -535,6 +557,16 @@ export async function buildAdminJs() {
       },
     },
     componentLoader,
+    pages: {
+      sliderBanner: {
+        icon: 'Image',
+        component: Components.SliderBannerSettings,
+      },
+      homeListings: {
+        icon: 'List',
+        component: Components.HomeListingsSettings,
+      },
+    },
     resources: [
       {
         resource: db.table('admins'),

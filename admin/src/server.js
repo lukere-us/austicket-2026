@@ -13,6 +13,17 @@ import os from 'os'
 import { buildAuthenticatedRouter } from '@adminjs/express'
 import { buildAdminJs } from './adminjs.js'
 import { dbPool, getDbConfig } from './db.js'
+import {
+  homeHeroSettingFields,
+  loadHomeHeroSettings,
+  saveHomeHeroSettings,
+} from './lib/homeHeroSettings.js'
+import {
+  homeListingsSettingFields,
+  loadHomeListingsSettings,
+  saveHomeListingsSettings,
+} from './lib/homeListingsSettings.js'
+import { parseSettingsBody } from './lib/parseSettingsBody.js'
 
 dotenv.config()
 
@@ -334,6 +345,102 @@ async function start() {
   const store = new SequelizeStore({ db: sequelize })
   await store.sync()
 
+  const sessionOptions = {
+    store,
+    resave: false,
+    saveUninitialized: false,
+    secret: process.env.SESSION_SECRET || 'change-me',
+    name: 'aus_admin',
+    cookie: {
+      httpOnly: true,
+      sameSite: 'lax',
+    },
+  }
+
+  const sessionMiddleware = session(sessionOptions)
+
+  function requireAdminApi(req, res, next) {
+    if (req.session?.adminUser) return next()
+    res.status(401).json({ error: 'unauthorized' })
+  }
+
+  function jsonNoCache(res, payload) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
+    res.setHeader('Pragma', 'no-cache')
+    res.setHeader('Expires', '0')
+    res.status(200).type('json').send(JSON.stringify(payload))
+  }
+
+  // Settings API lives outside AdminJS formidable router so JSON bodies parse correctly.
+  const settingsApi = express.Router()
+  settingsApi.use(express.json({ limit: '256kb' }))
+
+  settingsApi.get('/home-hero', async (_req, res) => {
+    try {
+      const pool = dbPool()
+      jsonNoCache(res, {
+        settings: await loadHomeHeroSettings(pool),
+        fields: homeHeroSettingFields(),
+      })
+    } catch (e) {
+      res.status(500).json({ error: e?.message || String(e) })
+    }
+  })
+
+  settingsApi.post('/home-hero', async (req, res) => {
+    try {
+      const pool = dbPool()
+      const input = parseSettingsBody(req)
+      if (!input || typeof input !== 'object' || Object.keys(input).length < 3) {
+        res.status(400).json({
+          error: 'Empty settings payload. Restart the admin server and hard-refresh the page (Ctrl+Shift+R).',
+        })
+        return
+      }
+      const settings = await saveHomeHeroSettings(pool, input)
+      jsonNoCache(res, {
+        settings,
+        fields: homeHeroSettingFields(),
+        notice: { message: 'Slider & banner settings saved.', type: 'success' },
+      })
+    } catch (e) {
+      res.status(500).json({ error: e?.message || String(e) })
+    }
+  })
+
+  settingsApi.get('/home-listings', async (_req, res) => {
+    try {
+      const pool = dbPool()
+      jsonNoCache(res, {
+        settings: await loadHomeListingsSettings(pool),
+        fields: homeListingsSettingFields(),
+      })
+    } catch (e) {
+      res.status(500).json({ error: e?.message || String(e) })
+    }
+  })
+
+  settingsApi.post('/home-listings', async (req, res) => {
+    try {
+      const pool = dbPool()
+      const settings = await saveHomeListingsSettings(pool, parseSettingsBody(req))
+      jsonNoCache(res, {
+        settings,
+        fields: homeListingsSettingFields(),
+        notice: { message: 'Homepage listing settings saved.', type: 'success' },
+      })
+    } catch (e) {
+      res.status(500).json({ error: e?.message || String(e) })
+    }
+  })
+
+  app.use(
+    `${adminJs.options.rootPath}/api/settings`,
+    sessionMiddleware,
+    requireAdminApi,
+    settingsApi,
+  )
+
   const adminRouter = buildAuthenticatedRouter(
     adminJs,
     {
@@ -342,16 +449,7 @@ async function start() {
       cookiePassword: process.env.SESSION_SECRET || 'change-me',
     },
     null,
-    {
-      store,
-      resave: false,
-      saveUninitialized: false,
-      secret: process.env.SESSION_SECRET || 'change-me',
-      cookie: {
-        httpOnly: true,
-        sameSite: 'lax',
-      },
-    }
+    sessionOptions,
   )
 
   app.use(adminJs.options.rootPath, adminRouter)

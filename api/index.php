@@ -5,6 +5,9 @@ declare(strict_types=1);
 require_once __DIR__ . '/lib/http.php';
 require_once __DIR__ . '/lib/db.php';
 require_once __DIR__ . '/lib/jwt.php';
+require_once __DIR__ . '/lib/site_settings.php';
+require_once __DIR__ . '/lib/home_hero_settings.php';
+require_once __DIR__ . '/lib/home_listings_settings.php';
 
 cors();
 
@@ -252,7 +255,85 @@ function fetch_listing_cards(PDO $pdo, array $extraWhere, array $params, string 
   ";
   $stmt = $pdo->prepare($sql);
   $stmt->execute($params);
-  return $stmt->fetchAll() ?: [];
+  $rows = $stmt->fetchAll() ?: [];
+  return attach_upcoming_show_times($pdo, $rows);
+}
+
+function attach_upcoming_show_times(PDO $pdo, array $items, int $limitPerListing = 4): array
+{
+  if (count($items) === 0) {
+    return $items;
+  }
+
+  $listingIds = [];
+  foreach ($items as $row) {
+    if (isset($row['id'])) {
+      $listingIds[] = (int)$row['id'];
+    }
+  }
+  $listingIds = array_values(array_unique($listingIds));
+  if (count($listingIds) === 0) {
+    return $items;
+  }
+
+  $placeholders = implode(',', array_fill(0, count($listingIds), '?'));
+  $stmt = $pdo->prepare("
+    SELECT sh.listing_id, st.show_time, st.notes
+    FROM show_times st
+    INNER JOIN shows sh ON sh.id = st.show_id
+    WHERE sh.listing_id IN ($placeholders)
+      AND st.show_time >= UTC_TIMESTAMP()
+    ORDER BY st.show_time ASC
+  ");
+  $stmt->execute($listingIds);
+  $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+  $byListing = [];
+  foreach ($rows as $row) {
+    $lid = (string)$row['listing_id'];
+    if (!isset($byListing[$lid])) {
+      $byListing[$lid] = [];
+    }
+    if (count($byListing[$lid]) < $limitPerListing) {
+      $byListing[$lid][] = [
+        'show_time' => $row['show_time'],
+        'notes' => $row['notes'],
+      ];
+    }
+  }
+
+  foreach ($items as &$item) {
+    $lid = (string)($item['id'] ?? '');
+    $item['upcoming_show_times'] = $byListing[$lid] ?? [];
+  }
+  unset($item);
+
+  return $items;
+}
+
+function serve_upload_file(string $relativePath): void
+{
+  $rel = str_replace('\\', '/', trim($relativePath, '/'));
+  if ($rel === '' || str_contains($rel, '..')) {
+    json_response(['error' => 'not_found'], 404);
+  }
+
+  $root = realpath(__DIR__ . '/../Upload');
+  if (!$root) {
+    json_response(['error' => 'not_found'], 404);
+  }
+
+  $file = realpath($root . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $rel));
+  $rootPrefix = $root . DIRECTORY_SEPARATOR;
+  if (!$file || !str_starts_with($file, $rootPrefix) || !is_file($file)) {
+    json_response(['error' => 'not_found'], 404);
+  }
+
+  $mime = mime_content_type($file) ?: 'application/octet-stream';
+  header('Content-Type: ' . $mime);
+  header('Cache-Control: public, max-age=86400');
+  readfile($file);
+  exit;
 }
 
 // -------------------------
@@ -261,6 +342,11 @@ function fetch_listing_cards(PDO $pdo, array $extraWhere, array $params, string 
 
 if ($method === 'GET' && $path === '/') {
   json_response(['name' => 'aus-ticket-lanka-api', 'status' => 'ok']);
+}
+
+// Public: uploaded listing/gallery images from /Upload
+if ($method === 'GET' && preg_match('#^/media/(.+)$#', $path, $m)) {
+  serve_upload_file($m[1]);
 }
 
 // Public: cities with published listings (optionally scoped to country)
@@ -298,40 +384,26 @@ if ($method === 'GET' && $path === '/cities') {
 if ($method === 'GET' && $path === '/listings') {
   $pdo = db();
   $params = [];
-  $where = listing_visible_where();
+  $extra = [];
 
   if (!empty($_GET['type'])) {
-    $where[] = 't.slug = :type_slug';
+    $extra[] = 't.slug = :type_slug';
     $params[':type_slug'] = (string)$_GET['type'];
   }
 
   if (!empty($_GET['city'])) {
-    $where[] = listing_city_exists_sql(':city_name');
+    $extra[] = listing_city_exists_sql(':city_name');
     $params[':city_name'] = (string)$_GET['city'];
   }
 
   $countryName = normalize_country_name($_GET['country'] ?? null);
   if ($countryName !== null) {
-    $where[] = listing_country_exists_sql(':country_name');
+    $extra[] = listing_country_exists_sql(':country_name');
     $params[':country_name'] = $countryName;
   }
 
-  $sql = "
-    SELECT
-      l.id, l.title, l.slug, l.banner_image, l.trailer_url, l.publish_at,
-      t.name AS type_name, t.slug AS type_slug
-    FROM listings l
-    JOIN types t ON t.id = l.type_id
-    WHERE " . implode(' AND ', $where) . "
-    ORDER BY COALESCE(l.publish_at, l.created_at) DESC
-    LIMIT 100
-  ";
-
-  $stmt = $pdo->prepare($sql);
-  $stmt->execute($params);
-  $rows = $stmt->fetchAll();
-
-  json_response(['items' => $rows]);
+  $items = fetch_listing_cards($pdo, $extra, $params, 'COALESCE(l.publish_at, l.created_at) DESC', 100);
+  json_response(['items' => $items]);
 }
 
 // Public: featured listings for homepage carousel
@@ -806,6 +878,21 @@ if ($method === 'POST' && $path === '/analytics/booking-click') {
     ':ua' => read_user_agent(),
   ]);
   json_response(['ok' => true], 201);
+}
+
+// Public site settings (no cache — admin changes must show immediately)
+if ($method === 'GET' && $path === '/settings/home-hero') {
+  header('Cache-Control: no-store, no-cache, must-revalidate');
+  header('Pragma: no-cache');
+  $pdo = db();
+  json_response(['settings' => load_home_hero_settings($pdo)]);
+}
+
+if ($method === 'GET' && $path === '/settings/home-listings') {
+  header('Cache-Control: no-store, no-cache, must-revalidate');
+  header('Pragma: no-cache');
+  $pdo = db();
+  json_response(['settings' => load_home_listings_settings($pdo)]);
 }
 
 json_response(['error' => 'not_found'], 404);
