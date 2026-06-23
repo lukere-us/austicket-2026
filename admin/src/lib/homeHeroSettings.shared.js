@@ -5,19 +5,20 @@ const DEFAULTS = {
   autoplayIntervalMs: 5000,
   pauseOnHover: true,
   transitionDurationMs: 700,
-  maxSlides: 6,
+  maxSlides: 7,
   swipeThresholdPx: 40,
   showNavButtons: true,
   showDots: true,
-  showReflection: true,
+  showReflection: false,
   posterHeightMobileActive: 250,
   posterHeightDesktopActive: 450,
   posterHeightMobileInactive: 200,
   posterHeightDesktopInactive: 360,
-  stageHeightMobile: 300,
-  stageHeightDesktop: 500,
-  spreadMobile: 108,
-  spreadDesktop: 200,
+  stageHeightMobile: 400,
+  stageHeightDesktop: 520,
+  slideGap: -30,
+  spreadMobile: -30,
+  spreadDesktop: -30,
   inactiveBlurPx: 3,
   inactiveOpacity: 0.88,
   inactiveScale: 0.64,
@@ -60,8 +61,15 @@ export const FIELD_GROUPS = [
     id: 'layout',
     label: 'Carousel layout (3D)',
     fields: [
-      { key: 'spreadMobile', label: 'Side slide spread — mobile (px)', type: 'number', min: 40, max: 400, step: 4 },
-      { key: 'spreadDesktop', label: 'Side slide spread — desktop (px)', type: 'number', min: 40, max: 500, step: 4 },
+      {
+        key: 'slideGap',
+        label: 'Slide gap (px)',
+        type: 'number',
+        min: -80,
+        max: 500,
+        step: 1,
+        help: 'Horizontal distance between slide centers. Use negative values to overlap slides (e.g. -30).',
+      },
       { key: 'inactiveBlurPx', label: 'Inactive slide blur (px)', type: 'number', min: 0, max: 20, step: 1 },
       { key: 'inactiveOpacity', label: 'Inactive slide opacity', type: 'number', min: 0, max: 1, step: 0.01 },
       { key: 'inactiveScale', label: 'Inactive slide scale', type: 'number', min: 0.2, max: 1, step: 0.01 },
@@ -170,5 +178,16 @@ export function mergeHomeHeroSettings(input) {
       out[key] = field ? coerceValue(field, input[key], base[key]) : input[key]
     }
   }
+
+  if (input && input.slideGap === undefined) {
+    if (input.spreadDesktop !== undefined) out.slideGap = out.spreadDesktop
+    else if (input.spreadMobile !== undefined) out.slideGap = out.spreadMobile
+  }
+
+  if (typeof out.slideGap === 'number') {
+    out.spreadMobile = out.slideGap
+    out.spreadDesktop = out.slideGap
+  }
+
   return out
 }

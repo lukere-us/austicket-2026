@@ -26,7 +26,17 @@ function read_json_body(): array
 
 function get_bearer_token(): ?string
 {
-  $auth = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+  $auth = $_SERVER['HTTP_AUTHORIZATION']
+    ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION']
+    ?? '';
+
+  if ($auth === '' && function_exists('apache_request_headers')) {
+    $headers = apache_request_headers();
+    if (is_array($headers)) {
+      $auth = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+    }
+  }
+
   if (stripos($auth, 'Bearer ') === 0) {
     return trim(substr($auth, 7));
   }

@@ -311,6 +311,47 @@ function attach_upcoming_show_times(PDO $pdo, array $items, int $limitPerListing
   return $items;
 }
 
+/** Featured carousel: featured listings first, then recent items to reach $limit (no duplicates). */
+function fetch_carousel_listings(PDO $pdo, array $extra, array $params, int $limit): array
+{
+  $limit = max(1, min(12, $limit));
+  $featuredWhere = array_merge($extra, ['COALESCE(l.is_featured, 0) = 1']);
+  $featured = fetch_listing_cards(
+    $pdo,
+    $featuredWhere,
+    $params,
+    'COALESCE(l.publish_at, l.created_at) DESC',
+    $limit
+  );
+
+  if (count($featured) >= $limit) {
+    return array_slice($featured, 0, $limit);
+  }
+
+  $needed = $limit - count($featured);
+  $fillExtra = $extra;
+  $fillParams = $params;
+
+  $excludeIds = array_values(array_filter(array_map(
+    static fn($row) => isset($row['id']) ? (int)$row['id'] : 0,
+    $featured
+  )));
+
+  if (count($excludeIds) > 0) {
+    $inParts = [];
+    foreach ($excludeIds as $i => $id) {
+      $key = ':carousel_exclude_' . $i;
+      $inParts[] = $key;
+      $fillParams[$key] = $id;
+    }
+    $fillExtra[] = 'l.id NOT IN (' . implode(', ', $inParts) . ')';
+  }
+
+  $recent = fetch_listing_cards($pdo, $fillExtra, $fillParams, 'l.created_at DESC', $needed);
+
+  return array_merge($featured, $recent);
+}
+
 function serve_upload_file(string $relativePath): void
 {
   $rel = str_replace('\\', '/', trim($relativePath, '/'));
@@ -332,6 +373,7 @@ function serve_upload_file(string $relativePath): void
   $mime = mime_content_type($file) ?: 'application/octet-stream';
   header('Content-Type: ' . $mime);
   header('Cache-Control: public, max-age=86400');
+  header('Access-Control-Allow-Origin: *');
   readfile($file);
   exit;
 }
@@ -423,14 +465,19 @@ if ($method === 'GET' && $path === '/listings/featured') {
     $params[':city_name'] = (string)$_GET['city'];
   }
 
-  $featuredWhere = array_merge($extra, ['COALESCE(l.is_featured, 0) = 1']);
-  $featured = fetch_listing_cards($pdo, $featuredWhere, $params, 'COALESCE(l.publish_at, l.created_at) DESC', 6);
+  $limit = min(12, max(1, (int)($_GET['limit'] ?? 7)));
 
-  if (count($featured) === 0) {
-    $featured = fetch_listing_cards($pdo, $extra, $params, 'l.created_at DESC', 6);
+  $items = fetch_carousel_listings($pdo, $extra, $params, $limit);
+
+  $hasFeatured = false;
+  foreach ($items as $row) {
+    if ((int)($row['is_featured'] ?? 0) === 1) {
+      $hasFeatured = true;
+      break;
+    }
   }
 
-  json_response(['items' => $featured, 'featured_only' => count($featured) > 0 && (int)($featured[0]['is_featured'] ?? 0) === 1]);
+  json_response(['items' => $items, 'featured_only' => $hasFeatured]);
 }
 
 // Public: AJAX search suggestions
@@ -512,6 +559,18 @@ if ($method === 'GET' && preg_match('#^/listings/([^/]+)$#', $path, $m)) {
   // Expand promotions shortcodes inside listing HTML
   $listing['description_html'] = expand_promotion_shortcodes($pdo, $listing['description_html'] ?? null);
 
+  // Cast members (if configured)
+  $stmt = $pdo->prepare("
+    SELECT c.id, c.name, c.position, c.image_path
+    FROM listing_casts lc
+    JOIN casts c ON c.id = lc.cast_id
+    WHERE lc.listing_id = :id
+    ORDER BY lc.sort_order ASC, lc.id ASC
+    LIMIT 12
+  ");
+  $stmt->execute([':id' => $listing['id']]);
+  $casts = $stmt->fetchAll();
+
   $stmt = $pdo->prepare("SELECT id, image_path, sort_order FROM listing_gallery_images WHERE listing_id = :id ORDER BY sort_order ASC, id ASC");
   $stmt->execute([':id' => $listing['id']]);
   $gallery = $stmt->fetchAll();
@@ -561,11 +620,36 @@ if ($method === 'GET' && preg_match('#^/listings/([^/]+)$#', $path, $m)) {
   }
 
   $stmt = $pdo->prepare("
-    SELECT l2.id, l2.title, l2.slug, l2.banner_image
+    SELECT DISTINCT co.name AS country_name
+    FROM shows s
+    JOIN places p ON p.id = s.place_id
+    JOIN cities c ON c.id = p.city_id
+    JOIN states st ON st.id = c.state_id
+    JOIN countries co ON co.id = st.country_id
+    WHERE s.listing_id = :id
+    ORDER BY co.name ASC
+  ");
+  $stmt->execute([':id' => $listing['id']]);
+  $showCountries = array_values(array_filter(array_map(
+    fn($row) => $row['country_name'] ?? null,
+    $stmt->fetchAll()
+  )));
+
+  $stmt = $pdo->prepare("
+    SELECT l2.id, l2.title, l2.slug, l2.banner_image,
+      (
+        SELECT c.name
+        FROM shows sh
+        JOIN places p ON p.id = sh.place_id
+        JOIN cities c ON c.id = p.city_id
+        WHERE sh.listing_id = l2.id
+        ORDER BY sh.start_date ASC, sh.id ASC
+        LIMIT 1
+      ) AS city_name
     FROM listing_related r
     JOIN listings l2 ON l2.id = r.related_listing_id
     WHERE r.listing_id = :id
-    LIMIT 4
+    LIMIT 6
   ");
   $stmt->execute([':id' => $listing['id']]);
   $related = $stmt->fetchAll();
@@ -589,8 +673,10 @@ if ($method === 'GET' && preg_match('#^/listings/([^/]+)$#', $path, $m)) {
 
   json_response([
     'listing' => $listing,
+    'casts' => $casts,
     'gallery' => $gallery,
     'shows' => $shows,
+    'show_countries' => $showCountries,
     'related' => $related,
     'comments' => $comments,
     'rating' => $ratingAgg,
@@ -774,11 +860,152 @@ if ($method === 'GET' && $path === '/me') {
   $uid = (int)$payload['sub'];
 
   $pdo = db();
-  $stmt = $pdo->prepare("SELECT id, name, email, phone, country, address, is_blocked, created_at FROM users WHERE id = :id LIMIT 1");
+  $stmt = $pdo->prepare("SELECT id, name, email, phone, country, address, is_blocked, created_at, updated_at FROM users WHERE id = :id LIMIT 1");
   $stmt->execute([':id' => $uid]);
   $user = $stmt->fetch();
   if (!$user) json_response(['error' => 'not_found'], 404);
   json_response(['user' => $user]);
+}
+
+// Me: update profile
+if ($method === 'PATCH' && $path === '/me') {
+  $payload = require_user();
+  $uid = (int)$payload['sub'];
+  $body = read_json_body();
+
+  $name = trim((string)($body['name'] ?? ''));
+  $phone = trim((string)($body['phone'] ?? ''));
+  $country = trim((string)($body['country'] ?? ''));
+  $address = trim((string)($body['address'] ?? ''));
+
+  if ($name === '' || strlen($name) > 120) {
+    json_response(['error' => 'invalid_input'], 400);
+  }
+  if (strlen($phone) > 40 || strlen($country) > 120 || strlen($address) > 255) {
+    json_response(['error' => 'invalid_input'], 400);
+  }
+
+  $pdo = db();
+  $stmt = $pdo->prepare("
+    UPDATE users
+    SET name = :n, phone = :p, country = :c, address = :a
+    WHERE id = :id
+  ");
+  $stmt->execute([
+    ':n' => $name,
+    ':p' => $phone !== '' ? $phone : null,
+    ':c' => $country !== '' ? $country : null,
+    ':a' => $address !== '' ? $address : null,
+    ':id' => $uid,
+  ]);
+
+  $stmt = $pdo->prepare("SELECT id, name, email, phone, country, address, is_blocked, created_at, updated_at FROM users WHERE id = :id LIMIT 1");
+  $stmt->execute([':id' => $uid]);
+  $user = $stmt->fetch();
+  json_response(['user' => $user]);
+}
+
+// Me: change password
+if ($method === 'POST' && $path === '/me/password') {
+  $payload = require_user();
+  $uid = (int)$payload['sub'];
+  $body = read_json_body();
+
+  $current = (string)($body['current_password'] ?? '');
+  $new = (string)($body['new_password'] ?? '');
+  if ($current === '' || strlen($new) < 8) {
+    json_response(['error' => 'invalid_input'], 400);
+  }
+
+  $pdo = db();
+  $stmt = $pdo->prepare("SELECT password_hash FROM users WHERE id = :id LIMIT 1");
+  $stmt->execute([':id' => $uid]);
+  $user = $stmt->fetch();
+  if (!$user || !password_verify($current, $user['password_hash'])) {
+    json_response(['error' => 'invalid_credentials'], 401);
+  }
+
+  $hash = password_hash($new, PASSWORD_BCRYPT);
+  $stmt = $pdo->prepare("UPDATE users SET password_hash = :p WHERE id = :id");
+  $stmt->execute([':p' => $hash, ':id' => $uid]);
+  json_response(['ok' => true]);
+}
+
+// Me: watch history
+if ($method === 'GET' && $path === '/me/watch-history') {
+  $payload = require_user();
+  $uid = (int)$payload['sub'];
+  $limit = min(max((int)($_GET['limit'] ?? 20), 1), 50);
+
+  $pdo = db();
+  $stmt = $pdo->prepare("
+    SELECT
+      pv.listing_id,
+      MAX(pv.created_at) AS visited_at,
+      l.title,
+      l.slug,
+      l.banner_image,
+      t.name AS type_name,
+      (
+        SELECT CONCAT(p.name, ', ', c.name)
+        FROM shows sh
+        JOIN places p ON p.id = sh.place_id
+        JOIN cities c ON c.id = p.city_id
+        WHERE sh.listing_id = l.id
+        ORDER BY COALESCE(sh.start_date, '9999-12-31') ASC, sh.id ASC
+        LIMIT 1
+      ) AS event_location
+    FROM page_visits pv
+    JOIN listings l ON l.id = pv.listing_id
+    JOIN types t ON t.id = l.type_id
+    WHERE pv.user_id = :uid AND pv.listing_id IS NOT NULL
+    GROUP BY pv.listing_id, l.title, l.slug, l.banner_image, t.name
+    ORDER BY visited_at DESC
+    LIMIT $limit
+  ");
+  $stmt->execute([':uid' => $uid]);
+  json_response(['items' => $stmt->fetchAll()]);
+}
+
+// Me: suggested listings in country
+if ($method === 'GET' && $path === '/me/suggestions') {
+  $payload = require_user();
+  $uid = (int)$payload['sub'];
+  $countryName = normalize_country_name($_GET['country'] ?? null) ?? 'Australia';
+  $limit = min(max((int)($_GET['limit'] ?? 5), 1), 12);
+
+  $pdo = db();
+  $stmt = $pdo->prepare("
+    SELECT DISTINCT listing_id
+    FROM page_visits
+    WHERE user_id = :uid AND listing_id IS NOT NULL
+  ");
+  $stmt->execute([':uid' => $uid]);
+  $excludeIds = array_values(array_filter(array_map(
+    fn($row) => isset($row['listing_id']) ? (int)$row['listing_id'] : 0,
+    $stmt->fetchAll()
+  )));
+
+  $extra = [listing_country_exists_sql(':country_name')];
+  $params = [':country_name' => $countryName];
+  if (count($excludeIds)) {
+    $parts = [];
+    foreach ($excludeIds as $i => $id) {
+      $key = ':ex' . $i;
+      $parts[] = $key;
+      $params[$key] = $id;
+    }
+    $extra[] = 'l.id NOT IN (' . implode(',', $parts) . ')';
+  }
+
+  $items = fetch_listing_cards(
+    $pdo,
+    $extra,
+    $params,
+    'COALESCE(l.publish_at, l.created_at) DESC',
+    $limit
+  );
+  json_response(['items' => $items, 'country' => $countryName]);
 }
 
 // User action: rating

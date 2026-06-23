@@ -48,8 +48,9 @@ function home_hero_merge_settings(array $input): array
     'posterHeightDesktopInactive' => ['num', 150, 700],
     'stageHeightMobile' => ['num', 200, 700],
     'stageHeightDesktop' => ['num', 300, 900],
-    'spreadMobile' => ['num', 40, 400],
-    'spreadDesktop' => ['num', 40, 500],
+    'slideGap' => ['num', -80, 500],
+    'spreadMobile' => ['num', -80, 400],
+    'spreadDesktop' => ['num', -80, 500],
     'inactiveBlurPx' => ['num', 0, 20],
     'inactiveOpacity' => ['num', 0, 1],
     'inactiveScale' => ['num', 0.2, 1],
@@ -96,6 +97,19 @@ function home_hero_merge_settings(array $input): array
       continue;
     }
     $out[$key] = $raw;
+  }
+
+  if (!array_key_exists('slideGap', $input)) {
+    if (array_key_exists('spreadDesktop', $input)) {
+      $out['slideGap'] = $out['spreadDesktop'];
+    } elseif (array_key_exists('spreadMobile', $input)) {
+      $out['slideGap'] = $out['spreadMobile'];
+    }
+  }
+
+  if (isset($out['slideGap']) && is_numeric($out['slideGap'])) {
+    $out['spreadMobile'] = $out['slideGap'];
+    $out['spreadDesktop'] = $out['slideGap'];
   }
 
   return $out;

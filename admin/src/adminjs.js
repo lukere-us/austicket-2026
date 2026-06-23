@@ -1,6 +1,8 @@
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { AdminJS, ComponentLoader } from 'adminjs'
+import NewAction from '../node_modules/adminjs/lib/backend/actions/new/new-action.js'
+import EditAction from '../node_modules/adminjs/lib/backend/actions/edit/edit-action.js'
 import Adapter, { Database, Resource } from '@adminjs/sql'
 import { dbPool } from './db.js'
 
@@ -140,6 +142,244 @@ export async function buildAdminJs() {
     if (request.fields) delete request.fields.casts_payload
   }
 
+  const LISTING_VIRTUAL_PAYLOAD_KEYS = ['shows_payload', 'gallery_payload', 'casts_payload']
+
+  const LISTING_NULLABLE_FIELDS = [
+    'description_html',
+    'banner_image',
+    'detail_banner_image',
+    'trailer_url',
+    'publish_at',
+    'unpublish_at',
+    'created_by_admin_id',
+    'updated_by_admin_id',
+  ]
+
+  const LISTING_READONLY_ON_SAVE = ['id', 'created_at', 'updated_at']
+
+  const LISTING_REFERENCE_FIELDS = ['type_id', 'created_by_admin_id', 'updated_by_admin_id']
+
+  function coerceListingReferenceId(value) {
+    if (value == null || value === '') return value
+    if (typeof value === 'object' && !Array.isArray(value)) {
+      const nested = value.params?.id ?? value.id
+      if (nested != null && nested !== '') return nested
+    }
+    return value
+  }
+
+  function listingEmptyFormValue(value) {
+    if (value === '' || value == null) return true
+    if (value instanceof Date) return Number.isNaN(value.getTime())
+    if (typeof value === 'object' && !Array.isArray(value)) {
+      return Object.keys(value).length === 0
+    }
+    return false
+  }
+
+  /** Strip virtual form fields and normalize empty strings before SQL insert/update. */
+  function prepareListingRequest(request) {
+    if (!request) return
+    stashListingShowsPayload(request)
+    stashListingGalleryPayload(request)
+    stashListingCastsPayload(request)
+
+    const normalize = (obj) => {
+      if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return
+      for (const key of LISTING_VIRTUAL_PAYLOAD_KEYS) {
+        delete obj[key]
+      }
+      for (const key of LISTING_READONLY_ON_SAVE) {
+        delete obj[key]
+      }
+      for (const key of LISTING_REFERENCE_FIELDS) {
+        if (Object.prototype.hasOwnProperty.call(obj, key)) {
+          obj[key] = coerceListingReferenceId(obj[key])
+        }
+      }
+      for (const key of LISTING_NULLABLE_FIELDS) {
+        if (Object.prototype.hasOwnProperty.call(obj, key) && listingEmptyFormValue(obj[key])) {
+          obj[key] = null
+        }
+      }
+      if (!Object.prototype.hasOwnProperty.call(obj, 'is_featured') || listingEmptyFormValue(obj.is_featured)) {
+        obj.is_featured = 0
+      } else if (obj.is_featured === true || obj.is_featured === 'true' || obj.is_featured === '1' || obj.is_featured === 1) {
+        obj.is_featured = 1
+      } else {
+        obj.is_featured = 0
+      }
+    }
+
+    normalize(request.payload)
+    normalize(request.fields)
+  }
+
+  async function persistListingRelatedData(request, recordId) {
+    const payload = request?._listingShowsPayload
+    if (payload) {
+      const parsed = JSON.parse(String(payload))
+      const shows = Array.isArray(parsed?.shows) ? parsed.shows : []
+      await upsertListingShows({ listingId: Number(recordId), shows })
+    }
+    const galleryPayload = request?._listingGalleryPayload
+    if (galleryPayload) {
+      const gParsed = JSON.parse(String(galleryPayload))
+      const images = Array.isArray(gParsed?.images) ? gParsed.images : []
+      await upsertListingGallery({ listingId: Number(recordId), images })
+    }
+    const castsPayload = request?._listingCastsPayload
+    if (castsPayload) {
+      const cParsed = JSON.parse(String(castsPayload))
+      const castIds = Array.isArray(cParsed?.cast_ids) ? cParsed.cast_ids : []
+      await upsertListingCasts({ listingId: Number(recordId), castIds })
+    }
+  }
+
+  /** @adminjs/sql create() does not return insertId — resolve id from response, context, or slug. */
+  async function resolveListingRecordId(response, request, context) {
+    const fromParams = request?.params?.recordId
+    if (fromParams != null && fromParams !== '') return Number(fromParams)
+
+    const direct =
+      response?.record?.id ??
+      response?.record?.params?.id ??
+      (typeof context?.record?.id === 'function' ? context.record.id() : context?.record?.id)
+    if (direct != null && direct !== '') return Number(direct)
+
+    const slug = String(
+      request?.payload?.slug ?? request?.fields?.slug ?? response?.record?.params?.slug ?? ''
+    ).trim()
+    if (!slug) return null
+
+    try {
+      const pool = dbPool()
+      const [rows] = await pool.execute(
+        'SELECT id FROM listings WHERE slug = ? ORDER BY id DESC LIMIT 1',
+        [slug]
+      )
+      const id = rows?.[0]?.id
+      return id != null ? Number(id) : null
+    } catch {
+      return null
+    }
+  }
+
+  async function finalizeListingRecordResponse(response, request, context, { isNew = false } = {}) {
+    if (!response || typeof response !== 'object') return response
+    const recordId = await resolveListingRecordId(response, request, context)
+    const { resource, currentAdmin, h } = context || {}
+
+    if (recordId && resource?.findOne) {
+      try {
+        const fresh = await resource.findOne(String(recordId))
+        if (fresh && typeof fresh.toJSON === 'function') {
+          const recordJson = stripBigIntDeep(fresh.toJSON(currentAdmin))
+          const resourceId = resource._decorated?.id?.() || resource.id?.() || 'listings'
+          const out = stripBigIntDeep({
+            ...response,
+            record: recordJson,
+          })
+          if (isNew && h?.editUrl && !out.redirectUrl) {
+            out.redirectUrl = h.editUrl(resourceId, String(recordId))
+          }
+          return out
+        }
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[listings] finalizeListingRecordResponse', e)
+      }
+    }
+
+    return attachFreshListingRecordJson(response, context)
+  }
+
+  async function completeListingAfterSave(response, request, context, { isNew = false } = {}) {
+    if (response?.notice?.type === 'error') {
+      return stripBigIntDeep(response)
+    }
+    const recordId = await resolveListingRecordId(response, request, context)
+    if (!recordId) {
+      return finalizeListingRecordResponse(response, request, context, { isNew })
+    }
+
+    try {
+      await persistListingRelatedData(request, recordId)
+      return finalizeListingRecordResponse(response, request, context, { isNew })
+    } catch (e) {
+      return finalizeListingRecordResponse(
+        {
+          ...response,
+          notice: {
+            message: `Listing saved but related data failed to save: ${e?.message || e}`,
+            type: 'error',
+          },
+        },
+        request,
+        context,
+        { isNew }
+      )
+    }
+  }
+
+  async function listingEditHandler(request, response, context) {
+    try {
+      return await EditAction.handler(request, response, context)
+    } catch (e) {
+      const { record, currentAdmin } = context
+      let recordJson = { params: {}, errors: {}, populated: {} }
+      if (record && typeof record.toJSON === 'function') {
+        try {
+          recordJson = stripBigIntDeep(record.toJSON(currentAdmin))
+        } catch {
+          // keep empty shell
+        }
+      }
+      const msg = String(e?.message || e)
+      if (e?.code === 'ER_DUP_ENTRY' && msg.includes('uq_listings_slug')) {
+        const slug = String(request?.payload?.slug ?? request?.fields?.slug ?? '').trim()
+        return {
+          record: {
+            ...recordJson,
+            errors: {
+              slug: { message: slug ? `Slug "${slug}" is already in use.` : 'This slug is already in use.' },
+            },
+          },
+          notice: { message: 'thereWereValidationErrors', type: 'error' },
+        }
+      }
+      return {
+        record: recordJson,
+        notice: { message: msg.slice(0, 500), type: 'error' },
+      }
+    }
+  }
+
+  async function listingNewHandler(request, response, context) {
+    try {
+      return await NewAction.handler(request, response, context)
+    } catch (e) {
+      const msg = String(e?.message || e)
+      if (e?.code === 'ER_DUP_ENTRY' && msg.includes('uq_listings_slug')) {
+        const slug = String(request?.payload?.slug ?? request?.fields?.slug ?? '').trim()
+        return {
+          record: {
+            params: {
+              ...(request?.payload && typeof request.payload === 'object' ? request.payload : {}),
+            },
+            errors: {
+              slug: { message: slug ? `Slug "${slug}" is already in use.` : 'This slug is already in use.' },
+            },
+            populated: {},
+            baseError: null,
+          },
+          notice: { message: 'thereWereValidationErrors', type: 'error' },
+        }
+      }
+      throw e
+    }
+  }
+
   /** Express / JSON.stringify cannot serialize BigInt; mysql2 may surface BIGINT values as bigint. */
   function stripBigIntDeep(value) {
     if (typeof value === 'bigint') return value.toString()
@@ -163,15 +403,15 @@ export async function buildAdminJs() {
     if (!response || typeof response !== 'object') return response
     const live = context?.record
     const currentAdmin = context?.currentAdmin
-    if (!live || typeof live.toJSON !== 'function') return response
+    if (!live || typeof live.toJSON !== 'function') return stripBigIntDeep(response)
     try {
       const recordJson = live.toJSON(currentAdmin)
-      return {
+      return stripBigIntDeep({
         ...response,
-        record: stripBigIntDeep(recordJson),
-      }
+        record: recordJson,
+      })
     } catch {
-      return response
+      return stripBigIntDeep(response)
     }
   }
 
@@ -180,27 +420,19 @@ export async function buildAdminJs() {
     return new Date().toISOString().slice(0, 19).replace('T', ' ')
   }
 
-  /** Ensure created_at/updated_at get sensible values on create/edit. */
-  function ensureListingTimestamps(request, { isNew }) {
+  /** Let MySQL defaults manage timestamps; only strip empty values so inserts stay valid. */
+  function ensureListingTimestamps(request) {
     if (!request) return
-    const now = mysqlNow()
-
     const payload = request.payload && typeof request.payload === 'object' ? request.payload : null
     const fields = request.fields && typeof request.fields === 'object' ? request.fields : null
-
-    const setIfMissing = (obj, key, value) => {
-      if (!obj) return
-      if (!(key in obj) || obj[key] === '' || obj[key] === null || typeof obj[key] === 'undefined') {
-        obj[key] = value
+    for (const obj of [payload, fields]) {
+      if (!obj) continue
+      for (const key of ['created_at', 'updated_at']) {
+        if (Object.prototype.hasOwnProperty.call(obj, key) && (obj[key] === '' || obj[key] == null)) {
+          delete obj[key]
+        }
       }
     }
-
-    if (isNew) {
-      setIfMissing(payload, 'created_at', now)
-      setIfMissing(fields, 'created_at', now)
-    }
-    setIfMissing(payload, 'updated_at', now)
-    setIfMissing(fields, 'updated_at', now)
   }
 
   function ensureListingAuditAdmins(request, context, { isNew }) {
@@ -285,8 +517,6 @@ export async function buildAdminJs() {
 
         const startDate = show.start_date ? String(show.start_date) : null
         const endDate = show.end_date ? String(show.end_date) : null
-        const publishAt = show.publish_at ? String(show.publish_at) : null
-        const unpublishAt = show.unpublish_at ? String(show.unpublish_at) : null
         const bookingUrl = show.booking_url ? String(show.booking_url) : null
         const ticketCost =
           show.ticket_cost === '' || show.ticket_cost === null || show.ticket_cost === undefined
@@ -297,11 +527,11 @@ export async function buildAdminJs() {
         const [showInsert] = await conn.execute(
           `
             INSERT INTO shows
-              (listing_id, place_id, start_date, end_date, publish_at, unpublish_at, booking_url, ticket_cost)
+              (listing_id, place_id, start_date, end_date, booking_url, ticket_cost)
             VALUES
-              (?, ?, ?, ?, ?, ?, ?, ?)
+              (?, ?, ?, ?, ?, ?)
           `,
-          [listingId, placeId, startDate, endDate, publishAt, unpublishAt, bookingUrl, normalizedTicketCost]
+          [listingId, placeId, startDate, endDate, bookingUrl, normalizedTicketCost]
         )
         const showId = showInsert?.insertId
         if (!showId) continue
@@ -385,7 +615,7 @@ export async function buildAdminJs() {
 
       const [srcRows] = await conn.execute(
         `
-          SELECT type_id, title, slug, description_html, banner_image, trailer_url,
+          SELECT type_id, title, slug, description_html, banner_image, detail_banner_image, trailer_url,
                  status, publish_at, unpublish_at
           FROM listings WHERE id = ?
         `,
@@ -402,10 +632,10 @@ export async function buildAdminJs() {
       const [ins] = await conn.execute(
         `
           INSERT INTO listings
-            (type_id, title, slug, description_html, banner_image, trailer_url,
+            (type_id, title, slug, description_html, banner_image, detail_banner_image, trailer_url,
              status, publish_at, unpublish_at, created_by_admin_id, updated_by_admin_id,
              created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         [
           src.type_id,
@@ -413,6 +643,7 @@ export async function buildAdminJs() {
           newSlug,
           src.description_html,
           src.banner_image,
+          src.detail_banner_image,
           src.trailer_url,
           src.status,
           src.publish_at,
@@ -450,7 +681,7 @@ export async function buildAdminJs() {
 
       const [showRows] = await conn.execute(
         `
-          SELECT id, place_id, start_date, end_date, publish_at, unpublish_at, booking_url, ticket_cost
+          SELECT id, place_id, start_date, end_date, booking_url, ticket_cost
           FROM shows WHERE listing_id = ?
         `,
         [sourceListingId]
@@ -460,17 +691,15 @@ export async function buildAdminJs() {
         const [showIns] = await conn.execute(
           `
             INSERT INTO shows
-              (listing_id, place_id, start_date, end_date, publish_at, unpublish_at, booking_url, ticket_cost,
+              (listing_id, place_id, start_date, end_date, booking_url, ticket_cost,
                created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
           `,
           [
             newListingId,
             show.place_id,
             show.start_date,
             show.end_date,
-            show.publish_at,
-            show.unpublish_at,
             show.booking_url,
             show.ticket_cost,
             now,
@@ -687,6 +916,11 @@ export async function buildAdminJs() {
                 show: Components.ListingStatusBadge,
               },
             },
+            is_featured: {
+              type: 'boolean',
+              isRequired: false,
+              props: { label: 'Featured item' },
+            },
             publish_at: {
               type: 'date',
               components: { edit: Components.ListingPublishDate },
@@ -703,96 +937,38 @@ export async function buildAdminJs() {
                 show: Components.ImageThumb,
               },
             },
+            detail_banner_image: {
+              isVisible: { list: false, show: true, edit: false, filter: false },
+              components: {
+                show: Components.ImageThumb,
+              },
+            },
           },
           actions: {
             new: {
               component: Components.ListingTabbedForm,
+              handler: listingNewHandler,
               before: async (request, context) => {
-                ensureListingTimestamps(request, { isNew: true })
+                prepareListingRequest(request)
+                ensureListingTimestamps(request)
                 ensureListingAuditAdmins(request, context, { isNew: true })
-                stashListingShowsPayload(request)
-                stashListingGalleryPayload(request)
-                stashListingCastsPayload(request)
                 return request
               },
               after: async (response, request, context) => {
-                try {
-                  const recordId = response?.record?.id
-                  const payload = request?._listingShowsPayload
-                  if (!recordId || !payload) return attachFreshListingRecordJson(response, context)
-                  const parsed = JSON.parse(String(payload))
-                  const shows = Array.isArray(parsed?.shows) ? parsed.shows : []
-                  await upsertListingShows({ listingId: Number(recordId), shows })
-                  const galleryPayload = request?._listingGalleryPayload
-                  if (galleryPayload) {
-                    const gParsed = JSON.parse(String(galleryPayload))
-                    const images = Array.isArray(gParsed?.images) ? gParsed.images : []
-                    await upsertListingGallery({ listingId: Number(recordId), images })
-                  }
-                  const castsPayload = request?._listingCastsPayload
-                  if (castsPayload) {
-                    const cParsed = JSON.parse(String(castsPayload))
-                    const castIds = Array.isArray(cParsed?.cast_ids) ? cParsed.cast_ids : []
-                    await upsertListingCasts({ listingId: Number(recordId), castIds })
-                  }
-                  return attachFreshListingRecordJson(response, context)
-                } catch (e) {
-                  return attachFreshListingRecordJson(
-                    {
-                      ...response,
-                      notice: {
-                        message: `Listing saved but shows failed to save: ${e?.message || e}`,
-                        type: 'error',
-                      },
-                    },
-                    context
-                  )
-                }
+                return completeListingAfterSave(response, request, context, { isNew: true })
               },
             },
             edit: {
               component: Components.ListingTabbedForm,
+              handler: listingEditHandler,
               before: async (request, context) => {
-                ensureListingTimestamps(request, { isNew: false })
+                prepareListingRequest(request)
+                ensureListingTimestamps(request)
                 ensureListingAuditAdmins(request, context, { isNew: false })
-                stashListingShowsPayload(request)
-                stashListingGalleryPayload(request)
-                stashListingCastsPayload(request)
                 return request
               },
               after: async (response, request, context) => {
-                try {
-                  const recordId = response?.record?.id
-                  const payload = request?._listingShowsPayload
-                  if (!recordId || !payload) return attachFreshListingRecordJson(response, context)
-                  const parsed = JSON.parse(String(payload))
-                  const shows = Array.isArray(parsed?.shows) ? parsed.shows : []
-                  await upsertListingShows({ listingId: Number(recordId), shows })
-                  const galleryPayload = request?._listingGalleryPayload
-                  if (galleryPayload) {
-                    const gParsed = JSON.parse(String(galleryPayload))
-                    const images = Array.isArray(gParsed?.images) ? gParsed.images : []
-                    await upsertListingGallery({ listingId: Number(recordId), images })
-                  }
-                  const castsPayload = request?._listingCastsPayload
-                  if (castsPayload) {
-                    const cParsed = JSON.parse(String(castsPayload))
-                    const castIds = Array.isArray(cParsed?.cast_ids) ? cParsed.cast_ids : []
-                    await upsertListingCasts({ listingId: Number(recordId), castIds })
-                  }
-                  return attachFreshListingRecordJson(response, context)
-                } catch (e) {
-                  return attachFreshListingRecordJson(
-                    {
-                      ...response,
-                      notice: {
-                        message: `Listing saved but shows failed to save: ${e?.message || e}`,
-                        type: 'error',
-                      },
-                    },
-                    context
-                  )
-                }
+                return completeListingAfterSave(response, request, context, { isNew: false })
               },
             },
             duplicate: {
@@ -900,14 +1076,14 @@ export async function buildAdminJs() {
           actions: {
             new: {
               before: async (request, context) => {
-                ensureListingTimestamps(request, { isNew: true })
+                ensureListingTimestamps(request)
                 ensureListingAuditAdmins(request, context, { isNew: true })
                 return request
               },
             },
             edit: {
               before: async (request, context) => {
-                ensureListingTimestamps(request, { isNew: false })
+                ensureListingTimestamps(request)
                 ensureListingAuditAdmins(request, context, { isNew: false })
                 return request
               },

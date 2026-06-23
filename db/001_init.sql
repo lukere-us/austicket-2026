@@ -170,6 +170,7 @@ CREATE TABLE IF NOT EXISTS listings (
   slug VARCHAR(220) NOT NULL,
   description_html MEDIUMTEXT NULL,
   banner_image VARCHAR(255) NULL,
+  detail_banner_image VARCHAR(255) NULL,
   trailer_url VARCHAR(255) NULL,
   status ENUM('draft','published','unpublished') NOT NULL DEFAULT 'draft',
   publish_at DATETIME NULL,
@@ -235,8 +236,6 @@ CREATE TABLE IF NOT EXISTS shows (
   place_id INT UNSIGNED NOT NULL,
   start_date DATE NULL,
   end_date DATE NULL,
-  publish_at DATETIME NULL,
-  unpublish_at DATETIME NULL,
   booking_url VARCHAR(500) NULL,
   ticket_cost DECIMAL(10,2) NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -244,8 +243,6 @@ CREATE TABLE IF NOT EXISTS shows (
   PRIMARY KEY (id),
   KEY idx_shows_listing (listing_id),
   KEY idx_shows_place (place_id),
-  KEY idx_shows_publish (publish_at),
-  KEY idx_shows_unpublish (unpublish_at),
   CONSTRAINT fk_shows_listing
     FOREIGN KEY (listing_id) REFERENCES listings(id)
     ON DELETE CASCADE,

@@ -41,10 +41,6 @@ function makeEmptyShow() {
 			"",
 		end_date:
 			"",
-		publish_at:
-			"",
-		unpublish_at:
-			"",
 		booking_url:
 			"",
 		ticket_cost:
@@ -68,8 +64,10 @@ function buildRecordState(
 		!initial
 	) {
 		return {
-			params:
-				{},
+			params: {
+				status: "draft",
+				is_featured: false,
+			},
 			errors:
 				{},
 			populated:
@@ -87,6 +85,24 @@ function buildRecordState(
 					...initial.params,
 				}
 			: {};
+	if (
+		!String(
+			params.status ??
+				"",
+		).trim()
+	) {
+		params.status = "draft";
+	}
+	if (
+		params.is_featured ===
+			undefined ||
+		params.is_featured ===
+			null ||
+		params.is_featured ===
+			""
+	) {
+		params.is_featured = false;
+	}
 	return {
 		id: initial.id,
 		params,
@@ -133,17 +149,7 @@ function normalizeShowPayload(
 					s?.start_date ||
 						"",
 				).trim();
-			const publish =
-				String(
-					s?.publish_at ||
-						"",
-				).trim();
-			// Prefer start_date; fallback to publish_at; empty sorts last.
-			return (
-				start ||
-				publish ||
-				""
-			);
+			return start || "";
 		};
 
 	return {
@@ -164,12 +170,6 @@ function normalizeShowPayload(
 							"",
 						end_date:
 							s?.end_date ??
-							"",
-						publish_at:
-							s?.publish_at ??
-							"",
-						unpublish_at:
-							s?.unpublish_at ??
 							"",
 						booking_url:
 							s?.booking_url ??
@@ -361,6 +361,221 @@ function parseShowBoundaryDate(
 		: undefined;
 }
 
+function showsHaveUserInput(
+	showsPayload,
+) {
+	const shows =
+		Array.isArray(
+			showsPayload?.shows,
+		)
+			? showsPayload.shows
+			: [];
+	return shows.some(
+		(
+			s,
+		) => {
+			if (
+				String(
+					s?.place_id ||
+						"",
+				).trim()
+			)
+				return true;
+			if (
+				extractShowCalendarYmd(
+					s?.start_date,
+				)
+			)
+				return true;
+			if (
+				extractShowCalendarYmd(
+					s?.end_date,
+				)
+			)
+				return true;
+			const times =
+				Array.isArray(
+					s?.times,
+				)
+					? s.times
+					: [];
+			return times.some(
+				(
+					t,
+				) =>
+					String(
+						t?.show_time ||
+							"",
+					).trim(),
+			);
+		},
+	);
+}
+
+function firstRecordErrorMessage(
+	errObj,
+	fallback,
+) {
+	if (
+		!errObj ||
+		typeof errObj !==
+			"object"
+	)
+		return fallback;
+	for (const val of Object.values(
+		errObj,
+	)) {
+		if (
+			val &&
+			typeof val ===
+				"object" &&
+			val.message
+		) {
+			return String(
+				val.message,
+			);
+		}
+	}
+	return fallback;
+}
+
+function sanitizeListingFormParams(
+	params,
+) {
+	const out =
+		{
+			...params,
+		};
+	for (const key of [
+		"description_html",
+		"banner_image",
+		"detail_banner_image",
+		"trailer_url",
+		"publish_at",
+		"unpublish_at",
+	]) {
+		const v =
+			out[
+				key
+			];
+		if (
+			v ===
+				"" ||
+			v ==
+				null
+		) {
+			out[
+				key
+			] = null;
+			continue;
+		}
+		if (
+			v instanceof
+				Date &&
+			Number.isNaN(
+				v.getTime(),
+			)
+		) {
+			out[
+				key
+			] = null;
+			continue;
+		}
+		if (
+			typeof v ===
+				"object" &&
+			!Array.isArray(
+				v,
+			) &&
+			Object.keys(
+				v,
+			).length ===
+				0
+		) {
+			out[
+				key
+			] = null;
+		}
+	}
+	if (
+		out.is_featured ===
+			undefined ||
+		out.is_featured ===
+			null ||
+		out.is_featured ===
+			""
+	) {
+		out.is_featured = false;
+	}
+	return out;
+}
+
+const LISTING_SAVE_KEYS = [
+	"type_id",
+	"title",
+	"slug",
+	"description_html",
+	"banner_image",
+	"detail_banner_image",
+	"trailer_url",
+	"status",
+	"is_featured",
+	"publish_at",
+	"unpublish_at",
+];
+
+function pickListingSaveParams(
+	params,
+) {
+	const clean =
+		sanitizeListingFormParams(
+			params &&
+				typeof params ===
+					"object"
+				? {
+						...params,
+					}
+				: {},
+		);
+	const out =
+		{};
+	for (const key of LISTING_SAVE_KEYS) {
+		if (
+			!Object.prototype.hasOwnProperty.call(
+				clean,
+				key,
+			)
+		)
+			continue;
+		let v =
+			clean[
+				key
+			];
+		if (
+			key ===
+				"type_id" &&
+			v &&
+			typeof v ===
+				"object"
+		) {
+			v =
+				v
+					?.params
+					?.id ??
+				v?.id;
+		}
+		if (
+			v !==
+			undefined
+		) {
+			out[
+				key
+			] = v;
+		}
+	}
+	return out;
+}
+
 function normalizeShowsPayloadForSave(
 	showsPayload,
 ) {
@@ -387,16 +602,8 @@ function normalizeShowsPayloadForSave(
 							s.end_date,
 						) ||
 						"",
-					publish_at:
-						normalizeListingDatetime(
-							s.publish_at,
-						) ||
-						"",
-					unpublish_at:
-						normalizeListingDatetime(
-							s.unpublish_at,
-						) ||
-						"",
+					publish_at: "",
+					unpublish_at: "",
 					times:
 						Array.isArray(
 							s.times,
@@ -459,52 +666,6 @@ function validateShowsPayload(
 		) {
 			errs.push(
 				`${label}: Start date must be <= End date.`,
-			);
-		}
-
-		const pubRaw =
-			String(
-				s.publish_at ||
-					"",
-			).trim();
-		const unpubRaw =
-			String(
-				s.unpublish_at ||
-					"",
-			).trim();
-		const pubNorm =
-			normalizeListingDatetime(
-				s.publish_at,
-			);
-		const unpubNorm =
-			normalizeListingDatetime(
-				s.unpublish_at,
-			);
-
-		if (
-			pubRaw &&
-			!pubNorm
-		) {
-			errs.push(
-				`${label}: Publish at is invalid.`,
-			);
-		}
-		if (
-			unpubRaw &&
-			!unpubNorm
-		) {
-			errs.push(
-				`${label}: Unpublish at is invalid.`,
-			);
-		}
-		if (
-			pubNorm &&
-			unpubNorm &&
-			unpubNorm <
-				pubNorm
-		) {
-			errs.push(
-				`${label}: Unpublish at must be >= Publish at.`,
 			);
 		}
 
@@ -2081,16 +2242,27 @@ export default function ListingTabbedForm(
 		useState(
 			false,
 		);
+	const [
+		savedListingId,
+		setSavedListingId,
+	] =
+		useState(
+			null,
+		);
 
 	const isEdit =
 		action?.name ===
 		"edit";
-	/** Prefer server record id on edit; avoids feedback loops with local `record` updates. */
+	/** After first create on the new form, keep using edit for later saves on the same page. */
 	const listingId =
 		isEdit
 			? (initialRecord?.id ??
 				record?.id)
-			: null;
+			: savedListingId;
+	const saveAsEdit =
+		isEdit ||
+		savedListingId !=
+			null;
 
 	const handlePropertyChange =
 		useCallback(
@@ -2141,6 +2313,9 @@ export default function ListingTabbedForm(
 		);
 		setSlugTouched(
 			false,
+		);
+		setSavedListingId(
+			null,
 		);
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- `initialRecord` is a new object every render; `recordSyncKey` is the stable identity
 	}, [
@@ -2235,6 +2410,8 @@ export default function ListingTabbedForm(
 						"shows_payload" &&
 					p.propertyPath !==
 						"banner_image" &&
+					p.propertyPath !==
+						"detail_banner_image" &&
 					p.propertyPath !==
 						"trailer_url" &&
 					p.propertyPath !==
@@ -2383,7 +2560,7 @@ export default function ListingTabbedForm(
 	// Load existing gallery images on edit
 	useEffect(() => {
 		if (
-			!isEdit ||
+			!saveAsEdit ||
 			listingId ==
 				null
 		)
@@ -2487,7 +2664,7 @@ export default function ListingTabbedForm(
 			cancelled = true;
 		};
 	}, [
-		isEdit,
+		saveAsEdit,
 		listingId,
 		api,
 	]);
@@ -2694,7 +2871,7 @@ export default function ListingTabbedForm(
 	// Load existing listing_casts on edit
 	useEffect(() => {
 		if (
-			!isEdit ||
+			!saveAsEdit ||
 			listingId ==
 				null
 		)
@@ -2772,7 +2949,7 @@ export default function ListingTabbedForm(
 			cancelled = true;
 		};
 	}, [
-		isEdit,
+		saveAsEdit,
 		listingId,
 		api,
 	]);
@@ -3028,9 +3205,79 @@ export default function ListingTabbedForm(
 			}
 		};
 
+	const onUploadDetailBanner =
+		async (
+			e,
+		) => {
+			try {
+				const file =
+					e
+						?.target
+						?.files?.[0];
+				if (
+					!file
+				)
+					return;
+				if (
+					file.size >
+					4 *
+						1024 *
+						1024
+				) {
+					sendNoticeRef.current(
+						{
+							type: "error",
+							message:
+								"Detail banner image must be <= 4MB",
+						},
+					);
+					return;
+				}
+				setBannerUploading(
+					true,
+				);
+				const uploaded =
+					await uploadImages(
+						[
+							file,
+						],
+					);
+				const first =
+					uploaded?.[0];
+				if (
+					!first?.storedPath
+				)
+					return;
+				handlePropertyChange(
+					"detail_banner_image",
+					first.storedPath,
+				);
+			} catch (err) {
+				sendNoticeRef.current(
+					{
+						type: "error",
+						message:
+							err?.message ||
+							String(
+								err,
+							),
+					},
+				);
+			} finally {
+				setBannerUploading(
+					false,
+				);
+				if (
+					e?.target
+				)
+					e.target.value =
+						"";
+			}
+		};
+
 	useEffect(() => {
 		if (
-			!isEdit ||
+			!saveAsEdit ||
 			listingId ==
 				null
 		) {
@@ -3123,16 +3370,6 @@ export default function ListingTabbedForm(
 										?.params
 										?.end_date ??
 									"",
-								publish_at:
-									s
-										?.params
-										?.publish_at ??
-									"",
-								unpublish_at:
-									s
-										?.params
-										?.unpublish_at ??
-									"",
 								booking_url:
 									s
 										?.params
@@ -3208,7 +3445,7 @@ export default function ListingTabbedForm(
 			cancelled = true;
 		};
 	}, [
-		isEdit,
+		saveAsEdit,
 		listingId,
 		api,
 	]);
@@ -3839,10 +4076,66 @@ export default function ListingTabbedForm(
 				true,
 			);
 			try {
-				const showErrs =
-					validateShowsPayload(
-						showsPayload,
+				const params =
+					record?.params ||
+					{};
+				const title =
+					String(
+						params.title ||
+							"",
+					).trim();
+				const slug =
+					String(
+						params.slug ||
+							"",
+					).trim();
+				const typeId =
+					params.type_id;
+				if (
+					!typeId
+				) {
+					sendNoticeRef.current?.(
+						{
+							type: "error",
+							message:
+								"Type is required.",
+						},
 					);
+					return;
+				}
+				if (
+					!title
+				) {
+					sendNoticeRef.current?.(
+						{
+							type: "error",
+							message:
+								"Title is required.",
+						},
+					);
+					return;
+				}
+				if (
+					!slug
+				) {
+					sendNoticeRef.current?.(
+						{
+							type: "error",
+							message:
+								"Slug is required.",
+						},
+					);
+					return;
+				}
+
+				const showErrs =
+					showsHaveUserInput(
+						showsPayload,
+					)
+						? validateShowsPayload(
+								showsPayload,
+							)
+						: [];
 				if (
 					showErrs.length
 				) {
@@ -3862,10 +4155,14 @@ export default function ListingTabbedForm(
 					normalizeShowsPayloadForSave(
 						showsPayload,
 					);
+				const baseParams =
+					pickListingSaveParams(
+						record?.params ||
+							{},
+					);
 				const payload =
 					{
-						...(record?.params ||
-							{}),
+						...baseParams,
 						shows_payload:
 							JSON.stringify(
 								showsPayloadNormalized,
@@ -3896,8 +4193,138 @@ export default function ListingTabbedForm(
 							),
 					};
 
+				const applySaveResponse =
+					(
+						res,
+					) => {
+						const rec =
+							res
+								?.data
+								?.record;
+						const errObj =
+							rec?.errors &&
+							typeof rec.errors ===
+								"object" &&
+							!Array.isArray(
+								rec.errors,
+							)
+								? rec.errors
+								: null;
+						const notice =
+							res
+								?.data
+								?.notice;
+						const hasFieldErrors =
+							errObj &&
+							Object.keys(
+								errObj,
+							)
+								.length >
+								0;
+
+						if (
+							hasFieldErrors ||
+							notice?.type ===
+								"error"
+						) {
+							if (
+								rec
+							) {
+								setRecord(
+									(
+										prev,
+									) =>
+										buildRecordState(
+											{
+												...prev,
+												...rec,
+												id:
+													prev?.id ??
+													rec?.id ??
+													rec
+														?.params
+														?.id,
+												params:
+													{
+														...(prev?.params ||
+															{}),
+														...(rec?.params &&
+														typeof rec.params ===
+															"object"
+															? rec.params
+															: {}),
+													},
+												errors:
+													hasFieldErrors
+														? errObj
+														: prev?.errors ||
+															{},
+											},
+										),
+								);
+							}
+							sendNotice(
+								{
+									type: "error",
+									message:
+										firstRecordErrorMessage(
+											errObj,
+											notice?.message ===
+												"thereWereValidationErrors"
+												? "Please fix the highlighted fields below."
+												: notice?.message ||
+													"Could not save listing.",
+										),
+								},
+							);
+							return false;
+						}
+
+						if (
+							notice
+						) {
+							sendNotice(
+								notice,
+							);
+						}
+
+						const newId =
+							extractAdminRecordId(
+								rec,
+							);
+						if (
+							newId &&
+							!saveAsEdit
+						) {
+							setSavedListingId(
+								newId,
+							);
+							setRecord(
+								(
+									prev,
+								) => ({
+									...prev,
+									id: newId,
+									params:
+										{
+											...(prev?.params ||
+												{}),
+											...(rec?.params &&
+											typeof rec.params ===
+												"object"
+												? rec.params
+												: {}),
+										},
+									errors:
+										{},
+								}),
+							);
+						}
+						return true;
+					};
+
 				if (
-					isEdit
+					saveAsEdit
 				) {
 					const res =
 						await api.recordAction(
@@ -3905,22 +4332,17 @@ export default function ListingTabbedForm(
 								resourceId:
 									resource.id,
 								recordId:
-									listingId,
+									String(
+										listingId,
+									),
 								actionName:
 									"edit",
 								data: payload,
 							},
 						);
-					if (
-						res
-							?.data
-							?.notice
-					)
-						sendNotice(
-							res
-								.data
-								.notice,
-						);
+					applySaveResponse(
+						res,
+					);
 				} else {
 					const res =
 						await api.resourceAction(
@@ -3932,23 +4354,28 @@ export default function ListingTabbedForm(
 								data: payload,
 							},
 						);
-					if (
-						res
-							?.data
-							?.notice
-					)
-						sendNotice(
-							res
-								.data
-								.notice,
-						);
+					applySaveResponse(
+						res,
+					);
 				}
 			} catch (e) {
+				const apiMsg =
+					e?.response
+						?.data
+						?.notice
+						?.message ||
+					e?.response
+						?.data
+						?.message ||
+					e?.response
+						?.data
+						?.error ||
+					e?.message;
 				sendNotice(
 					{
 						type: "error",
 						message:
-							e?.message ||
+							apiMsg ||
 							String(
 								e,
 							),
@@ -4296,6 +4723,57 @@ export default function ListingTabbedForm(
 									as="img"
 									src={`/admin/uploads-root/${encodeURIComponent(String(record.params.banner_image).split("/").pop() || "")}`}
 									alt="Banner"
+									style={{
+										width:
+											"100%",
+										maxWidth: 520,
+										height: 240,
+										objectFit:
+											"cover",
+										borderRadius: 12,
+										border:
+											"1px solid rgba(0,0,0,0.08)",
+									}}
+								/>
+							</Box>
+						) : null}
+					</Box>
+
+					<Box mt="lg">
+						<Label>
+							Detail
+							page
+							banner
+							(wide)
+						</Label>
+						<input
+							type="file"
+							accept="image/*"
+							onChange={
+								onUploadDetailBanner
+							}
+							disabled={
+								bannerUploading
+							}
+						/>
+						<Box mt="sm">
+							<Text variant="sm">
+								Saved
+								path:{" "}
+								{record
+									?.params
+									?.detail_banner_image ||
+									"(none)"}
+							</Text>
+						</Box>
+						{record
+							?.params
+							?.detail_banner_image ? (
+							<Box mt="md">
+								<Box
+									as="img"
+									src={`/admin/uploads-root/${encodeURIComponent(String(record.params.detail_banner_image).split("/").pop() || "")}`}
+									alt="Detail banner"
 									style={{
 										width:
 											"100%",
@@ -4817,88 +5295,6 @@ export default function ListingTabbedForm(
 																			0,
 																			10,
 																		)
-																	: "",
-															)
-														}
-													/>
-												</Box>
-											</Box>
-
-											<Box
-												mt="lg"
-												display="grid"
-												gridTemplateColumns="1fr 1fr"
-												gridGap="16px"
-											>
-												<Box>
-													<Label>
-														Publish
-														at
-													</Label>
-													<DatePicker
-														propertyType="date"
-														value={showDateToPickerIso(
-															s.publish_at,
-														)}
-														maxDate={parseShowBoundaryDate(
-															s.unpublish_at,
-														)}
-														style={{
-															maxWidth: 300,
-															width:
-																"100%",
-														}}
-														onChange={(
-															iso,
-														) =>
-															updateShow(
-																showIdx,
-																"publish_at",
-																iso
-																	? String(
-																			iso,
-																		).slice(
-																			0,
-																			10,
-																		) +
-																			" 00:00:00"
-																	: "",
-															)
-														}
-													/>
-												</Box>
-												<Box>
-													<Label>
-														Unpublish
-														at
-													</Label>
-													<DatePicker
-														propertyType="date"
-														value={showDateToPickerIso(
-															s.unpublish_at,
-														)}
-														minDate={parseShowBoundaryDate(
-															s.publish_at,
-														)}
-														style={{
-															maxWidth: 300,
-															width:
-																"100%",
-														}}
-														onChange={(
-															iso,
-														) =>
-															updateShow(
-																showIdx,
-																"unpublish_at",
-																iso
-																	? String(
-																			iso,
-																		).slice(
-																			0,
-																			10,
-																		) +
-																			" 00:00:00"
 																	: "",
 															)
 														}
