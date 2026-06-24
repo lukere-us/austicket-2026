@@ -71,6 +71,15 @@ function home_hero_merge_settings(array $input): array
     'scrimGradientMidOpacity' => ['num', 0, 100],
     'scrimGradientBottomOpacity' => ['num', 0, 100],
     'scrimSideOpacity' => ['num', 0, 100],
+    'counterTicketsBase' => ['num', 0, 10000000],
+    'counterTicketsLabel' => 'text',
+    'counterAusBase' => ['num', 0, 10000000],
+    'counterAusLabel' => 'text',
+    'counterNzBase' => ['num', 0, 10000000],
+    'counterNzLabel' => 'text',
+    'counterCustomersBase' => ['num', 0, 10000000],
+    'counterCustomersLabel' => 'text',
+    'counterAnimationMs' => ['num', 500, 8000],
   ];
 
   foreach ($defaults as $key => $fallback) {

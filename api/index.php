@@ -8,6 +8,7 @@ require_once __DIR__ . '/lib/jwt.php';
 require_once __DIR__ . '/lib/site_settings.php';
 require_once __DIR__ . '/lib/home_hero_settings.php';
 require_once __DIR__ . '/lib/home_listings_settings.php';
+require_once __DIR__ . '/lib/home_hero_stats.php';
 
 cors();
 
@@ -184,6 +185,76 @@ function listing_city_exists_sql(string $cityParam): string
         AND c.name = $cityParam
     )
   ";
+}
+
+function attach_show_times_to_shows(PDO $pdo, array $shows): array
+{
+  if (!count($shows)) return $shows;
+
+  $showIds = array_map(fn($s) => (string)$s['id'], $shows);
+  $in = implode(',', array_fill(0, count($showIds), '?'));
+  $stmt = $pdo->prepare("SELECT id, show_id, show_time, notes FROM show_times WHERE show_id IN ($in) ORDER BY show_time ASC");
+  $stmt->execute($showIds);
+  $times = $stmt->fetchAll();
+  $byShow = [];
+  foreach ($times as $t) {
+    $sid = (string)$t['show_id'];
+    if (!isset($byShow[$sid])) $byShow[$sid] = [];
+    $byShow[$sid][] = $t;
+  }
+  foreach ($shows as &$s) {
+    $s['times'] = $byShow[(string)$s['id']] ?? [];
+  }
+  unset($s);
+
+  return $shows;
+}
+
+function fetch_listing_show_countries(PDO $pdo, int $listingId): array
+{
+  $stmt = $pdo->prepare("
+    SELECT DISTINCT co.name AS country_name
+    FROM shows s
+    JOIN places p ON p.id = s.place_id
+    JOIN cities c ON c.id = p.city_id
+    JOIN states st ON st.id = c.state_id
+    JOIN countries co ON co.id = st.country_id
+    WHERE s.listing_id = :id
+    ORDER BY co.name ASC
+  ");
+  $stmt->execute([':id' => $listingId]);
+  return array_values(array_filter(array_map(
+    fn($row) => $row['country_name'] ?? null,
+    $stmt->fetchAll()
+  )));
+}
+
+function fetch_listing_detail_shows(PDO $pdo, int $listingId, ?string $countryName): array
+{
+  $showCountrySql = $countryName !== null ? 'AND co.name = :country_name' : '';
+  $showParams = [':id' => $listingId];
+  if ($countryName !== null) {
+    $showParams[':country_name'] = $countryName;
+  }
+
+  $stmt = $pdo->prepare("
+    SELECT
+      s.*,
+      p.name AS place_name, p.address AS place_address, p.google_map_link AS place_google_map_link,
+      c.name AS city_name,
+      st.name AS state_name,
+      co.name AS country_name
+    FROM shows s
+    JOIN places p ON p.id = s.place_id
+    JOIN cities c ON c.id = p.city_id
+    JOIN states st ON st.id = c.state_id
+    JOIN countries co ON co.id = st.country_id
+    WHERE s.listing_id = :id
+      $showCountrySql
+    ORDER BY s.start_date ASC, s.id ASC
+  ");
+  $stmt->execute($showParams);
+  return attach_show_times_to_shows($pdo, $stmt->fetchAll());
 }
 
 function listing_visible_where(): array
@@ -575,65 +646,20 @@ if ($method === 'GET' && preg_match('#^/listings/([^/]+)$#', $path, $m)) {
   $stmt->execute([':id' => $listing['id']]);
   $gallery = $stmt->fetchAll();
 
+  $showCountries = fetch_listing_show_countries($pdo, (int)$listing['id']);
   $countryName = normalize_country_name($_GET['country'] ?? null);
-  $showCountrySql = $countryName !== null ? 'AND co.name = :country_name' : '';
-  $showParams = [':id' => $listing['id']];
-  if ($countryName !== null) {
-    $showParams[':country_name'] = $countryName;
-  }
+  $showsMatchCountry = true;
+  $shows = fetch_listing_detail_shows($pdo, (int)$listing['id'], $countryName);
 
-  $stmt = $pdo->prepare("
-    SELECT
-      s.*,
-      p.name AS place_name, p.address AS place_address, p.google_map_link AS place_google_map_link,
-      c.name AS city_name,
-      st.name AS state_name,
-      co.name AS country_name
-    FROM shows s
-    JOIN places p ON p.id = s.place_id
-    JOIN cities c ON c.id = p.city_id
-    JOIN states st ON st.id = c.state_id
-    JOIN countries co ON co.id = st.country_id
-    WHERE s.listing_id = :id
-      $showCountrySql
-    ORDER BY s.start_date ASC, s.id ASC
-  ");
-  $stmt->execute($showParams);
-  $shows = $stmt->fetchAll();
-
-  if (count($shows)) {
-    $showIds = array_map(fn($s) => (string)$s['id'], $shows);
-    $in = implode(',', array_fill(0, count($showIds), '?'));
-    $stmt = $pdo->prepare("SELECT id, show_id, show_time, notes FROM show_times WHERE show_id IN ($in) ORDER BY show_time ASC");
-    $stmt->execute($showIds);
-    $times = $stmt->fetchAll();
-    $byShow = [];
-    foreach ($times as $t) {
-      $sid = (string)$t['show_id'];
-      if (!isset($byShow[$sid])) $byShow[$sid] = [];
-      $byShow[$sid][] = $t;
+  if ($countryName !== null && count($showCountries) > 0) {
+    $inSelectedCountry = in_array($countryName, $showCountries, true);
+    if (!$inSelectedCountry) {
+      $shows = [];
+      $showsMatchCountry = false;
+    } else {
+      $showsMatchCountry = true;
     }
-    foreach ($shows as &$s) {
-      $s['times'] = $byShow[(string)$s['id']] ?? [];
-    }
-    unset($s);
   }
-
-  $stmt = $pdo->prepare("
-    SELECT DISTINCT co.name AS country_name
-    FROM shows s
-    JOIN places p ON p.id = s.place_id
-    JOIN cities c ON c.id = p.city_id
-    JOIN states st ON st.id = c.state_id
-    JOIN countries co ON co.id = st.country_id
-    WHERE s.listing_id = :id
-    ORDER BY co.name ASC
-  ");
-  $stmt->execute([':id' => $listing['id']]);
-  $showCountries = array_values(array_filter(array_map(
-    fn($row) => $row['country_name'] ?? null,
-    $stmt->fetchAll()
-  )));
 
   $stmt = $pdo->prepare("
     SELECT l2.id, l2.title, l2.slug, l2.banner_image,
@@ -677,6 +703,7 @@ if ($method === 'GET' && preg_match('#^/listings/([^/]+)$#', $path, $m)) {
     'gallery' => $gallery,
     'shows' => $shows,
     'show_countries' => $showCountries,
+    'shows_match_country' => $showsMatchCountry,
     'related' => $related,
     'comments' => $comments,
     'rating' => $ratingAgg,
@@ -878,7 +905,7 @@ if ($method === 'PATCH' && $path === '/me') {
   $country = trim((string)($body['country'] ?? ''));
   $address = trim((string)($body['address'] ?? ''));
 
-  if ($name === '' || strlen($name) > 120) {
+  if ($name === '' || utf8_strlen($name) > 120) {
     json_response(['error' => 'invalid_input'], 400);
   }
   if (strlen($phone) > 40 || strlen($country) > 120 || strlen($address) > 255) {
@@ -1036,7 +1063,7 @@ if ($method === 'POST' && preg_match('#^/listings/([0-9]+)/comments$#', $path, $
   $listingId = (int)$m[1];
   $body = read_json_body();
   $text = trim((string)($body['comment'] ?? ''));
-  if ($text === '' || strlen($text) > 2000) {
+  if ($text === '' || utf8_strlen($text) > 2000) {
     json_response(['error' => 'invalid_input'], 400);
   }
 
@@ -1113,6 +1140,17 @@ if ($method === 'GET' && $path === '/settings/home-hero') {
   header('Pragma: no-cache');
   $pdo = db();
   json_response(['settings' => load_home_hero_settings($pdo)]);
+}
+
+if ($method === 'GET' && $path === '/home/hero-counters') {
+  header('Cache-Control: no-store, no-cache, must-revalidate');
+  header('Pragma: no-cache');
+  $pdo = db();
+  $settings = load_home_hero_settings($pdo);
+  json_response([
+    'counters' => build_home_hero_counters($pdo, $settings),
+    'animationMs' => (int)($settings['counterAnimationMs'] ?? 2000),
+  ]);
 }
 
 if ($method === 'GET' && $path === '/settings/home-listings') {

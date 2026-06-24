@@ -24,6 +24,14 @@ function read_json_body(): array
   return $decoded;
 }
 
+function utf8_strlen(string $text): int
+{
+  if (function_exists('mb_strlen')) {
+    return mb_strlen($text, 'UTF-8');
+  }
+  return strlen($text);
+}
+
 function get_bearer_token(): ?string
 {
   $auth = $_SERVER['HTTP_AUTHORIZATION']

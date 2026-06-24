@@ -36,5 +36,14 @@
   "scrimGradientTopOpacity": 20,
   "scrimGradientMidOpacity": 45,
   "scrimGradientBottomOpacity": 90,
-  "scrimSideOpacity": 55
+  "scrimSideOpacity": 55,
+  "counterTicketsBase": 0,
+  "counterTicketsLabel": "Ticket Booked with us",
+  "counterAusBase": 0,
+  "counterAusLabel": "Listed event in AUS",
+  "counterNzBase": 0,
+  "counterNzLabel": "Listed event In NZ",
+  "counterCustomersBase": 0,
+  "counterCustomersLabel": "Happy Customers",
+  "counterAnimationMs": 2000
 }
