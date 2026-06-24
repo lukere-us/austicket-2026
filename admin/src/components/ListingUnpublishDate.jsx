@@ -1,95 +1,30 @@
-import React from "react";
+import React from 'react'
+import { DatePicker, Label } from '@adminjs/design-system'
 import {
-	DatePicker,
-	Label,
-} from "@adminjs/design-system";
+  listingDatePickerBoundary,
+  listingDatePickerIso,
+  listingDatetimeFromPicker,
+  normalizeListingDatetime,
+} from './listingDateUtils.js'
 
-function toDateOnly(
-	d,
-) {
-	if (
-		!d
-	)
-		return null;
-	const s =
-		String(
-			d,
-		).trim();
-	if (
-		!s
-	)
-		return null;
-	const date =
-		s.slice(
-			0,
-			10,
-		);
-	if (
-		!date
-	)
-		return null;
-	return new Date(
-		`${date}T00:00:00.000Z`,
-	);
-}
+export default function ListingUnpublishDate(props) {
+  const { property, record, onChange } = props
+  const path = property?.path || property?.propertyPath || 'unpublish_at'
+  const raw = record?.params?.[path]
+  const value = normalizeListingDatetime(raw)
+  const publish = listingDatePickerBoundary(record?.params?.publish_at)
 
-export default function ListingUnpublishDate(
-	props,
-) {
-	const {
-		property,
-		record,
-		onChange,
-	} =
-		props;
-	const value =
-		record
-			?.params?.[
-			property
-				?.path
-		] ??
-		"";
-	const publish =
-		toDateOnly(
-			record
-				?.params
-				?.publish_at,
-		);
-
-	return (
-		<div
-			style={{
-				maxWidth: 300,
-			}}
-		>
-			<Label>
-				{property?.label ||
-					"Unpublish at"}
-			</Label>
-			<DatePicker
-				propertyType="date"
-				value={
-					value
-						? `${String(value).slice(0, 10)}T00:00:00.000Z`
-						: ""
-				}
-				minDate={
-					publish ||
-					undefined
-				}
-				onChange={(
-					iso,
-				) => {
-					const next =
-						iso
-							? `${String(iso).slice(0, 10)} 00:00:00`
-							: "";
-					onChange(
-						property.path,
-						next,
-					);
-				}}
-			/>
-		</div>
-	);
+  return (
+    <div style={{ maxWidth: '100%' }}>
+      <Label>{property?.label || 'Unpublish at'}</Label>
+      <DatePicker
+        propertyType="date"
+        value={listingDatePickerIso(value)}
+        minDate={publish || undefined}
+        onChange={(iso) => {
+          onChange(path, listingDatetimeFromPicker(iso))
+        }}
+      />
+    </div>
+  )
 }

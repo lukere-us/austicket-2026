@@ -26,6 +26,26 @@ import {
 	TextArea,
 } from "@adminjs/design-system";
 import StableModal from "./StableModal.jsx";
+import ImageDropzone from "./ImageDropzone.jsx";
+import ListingPublishDate from "./ListingPublishDate.jsx";
+import ListingUnpublishDate from "./ListingUnpublishDate.jsx";
+import { normalizeListingDatetime } from "./listingDateUtils.js";
+
+function toListingMediaUrl(storedPath) {
+	const fileName =
+		String(
+			storedPath ||
+				"",
+		)
+			.split(
+				"/",
+			)
+			.pop() ||
+		"";
+	return fileName
+		? `/admin/uploads-root/${encodeURIComponent(fileName)}`
+		: null;
+}
 
 function makeClientKey() {
 	return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -102,6 +122,30 @@ function buildRecordState(
 			""
 	) {
 		params.is_featured = false;
+	}
+	for (const key of [
+		"publish_at",
+		"unpublish_at",
+	]) {
+		if (
+			params[
+				key
+			] !=
+				null &&
+			params[
+				key
+			] !==
+				""
+		) {
+			params[
+				key
+			] =
+				normalizeListingDatetime(
+					params[
+						key
+					],
+				);
+		}
 	}
 	return {
 		id: initial.id,
@@ -248,55 +292,6 @@ function isSqlDateTime(
 			s.trim(),
 		)
 	);
-}
-
-/** AdminJS / MySQL often return ISO (`YYYY-MM-DDTHH:mm:ss.sssZ`) or fractional seconds — normalize for validation + save. */
-function normalizeListingDatetime(
-	value,
-) {
-	const raw =
-		String(
-			value ??
-				"",
-		).trim();
-	if (
-		!raw
-	)
-		return "";
-
-	if (
-		/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/.test(
-			raw,
-		)
-	)
-		return raw;
-
-	let m =
-		raw.match(
-			/^(\d{4}-\d{2}-\d{2})[\sT](\d{2}:\d{2}:\d{2})\.\d+/,
-		);
-	if (
-		m
-	)
-		return `${m[1]} ${m[2]}`;
-
-	m =
-		raw.match(
-			/^(\d{4}-\d{2}-\d{2})[\sT](\d{2}:\d{2}:\d{2})(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/i,
-		);
-	if (
-		m
-	)
-		return `${m[1]} ${m[2]}`;
-
-	if (
-		/^\d{4}-\d{2}-\d{2}$/.test(
-			raw,
-		)
-	)
-		return `${raw} 00:00:00`;
-
-	return "";
 }
 
 /** `YYYY-MM-DD` slice from DATE/DATETIME/ISO — avoids `${iso}T00…` / `.000Z` duplication breaking react-datepicker. */
@@ -2423,11 +2418,26 @@ export default function ListingTabbedForm(
 					p.propertyPath !==
 						"created_by_admin_id" &&
 					p.propertyPath !==
-						"updated_by_admin_id",
+						"updated_by_admin_id" &&
+					p.propertyPath !==
+						"publish_at" &&
+					p.propertyPath !==
+						"unpublish_at",
 			);
 		}, [
 			resource,
 		]);
+
+	const publishAtProperty = {
+		path: "publish_at",
+		propertyPath: "publish_at",
+		label: "Publish at",
+	};
+	const unpublishAtProperty = {
+		path: "unpublish_at",
+		propertyPath: "unpublish_at",
+		label: "Unpublish at",
+	};
 
 	useEffect(() => {
 		ensureQuillStylesheet();
@@ -3039,46 +3049,46 @@ export default function ListingTabbedForm(
 				: [];
 		};
 
-	const onAddGalleryFiles =
+	const processGalleryFiles =
 		async (
-			e,
+			files,
 		) => {
-			try {
-				const files =
-					e
-						?.target
-						?.files;
-				if (
-					!files
-				)
-					return;
-				const remaining =
-					10 -
-					(galleryImages?.length ||
-						0);
-				if (
-					remaining <=
-					0
-				) {
-					sendNoticeRef.current(
-						{
-							type: "error",
-							message:
-								"Maximum 10 images already added",
-						},
-					);
-					return;
-				}
-				const subset =
-					Array.from(
-						files,
-					).slice(
-						0,
-						remaining,
-					);
-				setIsUploading(
-					true,
+			const list =
+				Array.from(
+					files ||
+						[],
 				);
+			if (
+				list.length ===
+				0
+			)
+				return;
+			const remaining =
+				10 -
+				(galleryImages?.length ||
+					0);
+			if (
+				remaining <=
+				0
+			) {
+				sendNoticeRef.current(
+					{
+						type: "error",
+						message:
+							"Maximum 10 images already added",
+					},
+				);
+				return;
+			}
+			const subset =
+				list.slice(
+					0,
+					remaining,
+				);
+			setIsUploading(
+				true,
+			);
+			try {
 				const uploaded =
 					await uploadImages(
 						subset,
@@ -3127,152 +3137,93 @@ export default function ListingTabbedForm(
 				setIsUploading(
 					false,
 				);
+			}
+		};
+
+	const uploadBannerFiles =
+		async (
+			files,
+			field,
+			label,
+		) => {
+			const file =
+				files?.[0];
+			if (
+				!file
+			)
+				return;
+			if (
+				file.size >
+				4 *
+					1024 *
+					1024
+			) {
+				sendNoticeRef.current(
+					{
+						type: "error",
+						message: `${label} must be <= 4MB`,
+					},
+				);
+				return;
+			}
+			setBannerUploading(
+				true,
+			);
+			try {
+				const uploaded =
+					await uploadImages(
+						[
+							file,
+						],
+					);
+				const first =
+					uploaded?.[0];
 				if (
-					e?.target
+					!first?.storedPath
 				)
-					e.target.value =
-						"";
+					return;
+				handlePropertyChange(
+					field,
+					first.storedPath,
+				);
+			} catch (err) {
+				sendNoticeRef.current(
+					{
+						type: "error",
+						message:
+							err?.message ||
+							String(
+								err,
+							),
+					},
+				);
+			} finally {
+				setBannerUploading(
+					false,
+				);
 			}
 		};
 
 	const onUploadBanner =
 		async (
-			e,
+			files,
 		) => {
-			try {
-				const file =
-					e
-						?.target
-						?.files?.[0];
-				if (
-					!file
-				)
-					return;
-				if (
-					file.size >
-					4 *
-						1024 *
-						1024
-				) {
-					sendNoticeRef.current(
-						{
-							type: "error",
-							message:
-								"Banner image must be <= 4MB",
-						},
-					);
-					return;
-				}
-				setBannerUploading(
-					true,
-				);
-				const uploaded =
-					await uploadImages(
-						[
-							file,
-						],
-					);
-				const first =
-					uploaded?.[0];
-				if (
-					!first?.storedPath
-				)
-					return;
-				handlePropertyChange(
-					"banner_image",
-					first.storedPath,
-				);
-			} catch (err) {
-				sendNoticeRef.current(
-					{
-						type: "error",
-						message:
-							err?.message ||
-							String(
-								err,
-							),
-					},
-				);
-			} finally {
-				setBannerUploading(
-					false,
-				);
-				if (
-					e?.target
-				)
-					e.target.value =
-						"";
-			}
+			await uploadBannerFiles(
+				files,
+				"banner_image",
+				"Banner image",
+			);
 		};
 
 	const onUploadDetailBanner =
 		async (
-			e,
+			files,
 		) => {
-			try {
-				const file =
-					e
-						?.target
-						?.files?.[0];
-				if (
-					!file
-				)
-					return;
-				if (
-					file.size >
-					4 *
-						1024 *
-						1024
-				) {
-					sendNoticeRef.current(
-						{
-							type: "error",
-							message:
-								"Detail banner image must be <= 4MB",
-						},
-					);
-					return;
-				}
-				setBannerUploading(
-					true,
-				);
-				const uploaded =
-					await uploadImages(
-						[
-							file,
-						],
-					);
-				const first =
-					uploaded?.[0];
-				if (
-					!first?.storedPath
-				)
-					return;
-				handlePropertyChange(
-					"detail_banner_image",
-					first.storedPath,
-				);
-			} catch (err) {
-				sendNoticeRef.current(
-					{
-						type: "error",
-						message:
-							err?.message ||
-							String(
-								err,
-							),
-					},
-				);
-			} finally {
-				setBannerUploading(
-					false,
-				);
-				if (
-					e?.target
-				)
-					e.target.value =
-						"";
-			}
+			await uploadBannerFiles(
+				files,
+				"detail_banner_image",
+				"Detail banner image",
+			);
 		};
 
 	useEffect(() => {
@@ -4483,6 +4434,71 @@ export default function ListingTabbedForm(
 						),
 					)}
 
+					<Box
+						mt="xl"
+						p="lg"
+						borderRadius="lg"
+						style={{
+							background:
+								"#fff",
+							border: "1px solid rgba(0,0,0,0.06)",
+						}}
+					>
+						<Label mb="sm">
+							Publishing
+							schedule
+						</Label>
+						<Text
+							variant="sm"
+							color="grey60"
+							mb="lg"
+						>
+							Optional
+							dates
+							to
+							control
+							when
+							this
+							listing
+							appears
+							on
+							the
+							public
+							site.
+						</Text>
+						<Box
+							display="grid"
+							style={{
+								gridTemplateColumns:
+									"repeat(auto-fit, minmax(240px, 1fr))",
+								gap: 20,
+							}}
+						>
+							<ListingPublishDate
+								property={
+									publishAtProperty
+								}
+								record={
+									record
+								}
+								onChange={
+									handleListingFieldChange
+								}
+							/>
+							<ListingUnpublishDate
+								property={
+									unpublishAtProperty
+								}
+								record={
+									record
+								}
+								onChange={
+									handleListingFieldChange
+								}
+							/>
+						</Box>
+					</Box>
+
 					<Box mt="xl">
 						<Label>
 							Description
@@ -4676,124 +4692,115 @@ export default function ListingTabbedForm(
 				<Box mt="xl">
 					<Text
 						variant="sm"
-						mb="lg"
+						color="grey60"
+						mb="xl"
 					>
-						Banner
-						image,
-						trailer
-						URL,
-						and
-						gallery
-						images
-						for
-						this
-						listing.
+						Upload banner images and gallery photos. Drag and drop files or click each zone to browse.
 					</Text>
 
-					<Box mt="lg">
-						<Label>
-							Banner
-							image
-						</Label>
-						<input
-							type="file"
-							accept="image/*"
-							onChange={
-								onUploadBanner
-							}
-							disabled={
-								bannerUploading
-							}
-						/>
-						<Box mt="sm">
-							<Text variant="sm">
-								Saved
-								path:{" "}
-								{record
-									?.params
-									?.banner_image ||
-									"(none)"}
-							</Text>
+					<Box
+						display="grid"
+						style={{
+							gridTemplateColumns:
+								"repeat(auto-fit, minmax(280px, 1fr))",
+							gap: 24,
+						}}
+					>
+						<Box
+							p="lg"
+							borderRadius="lg"
+							style={{
+								background:
+									"#fff",
+								border: "1px solid rgba(0,0,0,0.06)",
+							}}
+						>
+							<ImageDropzone
+								label="Banner image"
+								hint="Used on listing cards. Max 4MB."
+								previewUrl={toListingMediaUrl(
+									record
+										?.params
+										?.banner_image,
+								)}
+								previewAlt="Banner"
+								previewAspect="16 / 9"
+								uploading={
+									bannerUploading
+								}
+								onFiles={
+									onUploadBanner
+								}
+								onClear={
+									record
+										?.params
+										?.banner_image
+										? () =>
+												handlePropertyChange(
+													"banner_image",
+													"",
+												)
+										: undefined
+								}
+								emptyTitle="Drop banner image"
+								emptySubtitle="JPEG, PNG, or WebP"
+							/>
 						</Box>
-						{record
-							?.params
-							?.banner_image ? (
-							<Box mt="md">
-								<Box
-									as="img"
-									src={`/admin/uploads-root/${encodeURIComponent(String(record.params.banner_image).split("/").pop() || "")}`}
-									alt="Banner"
-									style={{
-										width:
-											"100%",
-										maxWidth: 520,
-										height: 240,
-										objectFit:
-											"cover",
-										borderRadius: 12,
-										border:
-											"1px solid rgba(0,0,0,0.08)",
-									}}
-								/>
-							</Box>
-						) : null}
+
+						<Box
+							p="lg"
+							borderRadius="lg"
+							style={{
+								background:
+									"#fff",
+								border: "1px solid rgba(0,0,0,0.06)",
+							}}
+						>
+							<ImageDropzone
+								label="Detail page banner (wide)"
+								hint="Hero image on the listing detail page. Max 4MB."
+								previewUrl={toListingMediaUrl(
+									record
+										?.params
+										?.detail_banner_image,
+								)}
+								previewAlt="Detail banner"
+								previewAspect="21 / 9"
+								uploading={
+									bannerUploading
+								}
+								onFiles={
+									onUploadDetailBanner
+								}
+								onClear={
+									record
+										?.params
+										?.detail_banner_image
+										? () =>
+												handlePropertyChange(
+													"detail_banner_image",
+													"",
+												)
+										: undefined
+								}
+								emptyTitle="Drop detail banner"
+								emptySubtitle="Wide format works best"
+							/>
+						</Box>
 					</Box>
 
-					<Box mt="lg">
+					<Box
+						mt="xl"
+						p="lg"
+						borderRadius="lg"
+						style={{
+							background:
+								"#fff",
+							border: "1px solid rgba(0,0,0,0.06)",
+						}}
+					>
 						<Label>
-							Detail
-							page
-							banner
-							(wide)
-						</Label>
-						<input
-							type="file"
-							accept="image/*"
-							onChange={
-								onUploadDetailBanner
-							}
-							disabled={
-								bannerUploading
-							}
-						/>
-						<Box mt="sm">
-							<Text variant="sm">
-								Saved
-								path:{" "}
-								{record
-									?.params
-									?.detail_banner_image ||
-									"(none)"}
-							</Text>
-						</Box>
-						{record
-							?.params
-							?.detail_banner_image ? (
-							<Box mt="md">
-								<Box
-									as="img"
-									src={`/admin/uploads-root/${encodeURIComponent(String(record.params.detail_banner_image).split("/").pop() || "")}`}
-									alt="Detail banner"
-									style={{
-										width:
-											"100%",
-										maxWidth: 520,
-										height: 240,
-										objectFit:
-											"cover",
-										borderRadius: 12,
-										border:
-											"1px solid rgba(0,0,0,0.08)",
-									}}
-								/>
-							</Box>
-						) : null}
-					</Box>
-
-					<Box mt="lg">
-						<Label>
-							Trailer
-							URL
+							Trailer URL
 						</Label>
 						<Input
 							value={
@@ -4816,45 +4823,70 @@ export default function ListingTabbedForm(
 						/>
 					</Box>
 
-					<Box mt="xl">
-						<Label>
-							Gallery
-							images
-							(max
-							10,
-							4MB
-							each)
-						</Label>
-						<input
-							type="file"
-							accept="image/*"
-							multiple
-							onChange={
-								onAddGalleryFiles
-							}
-							disabled={
-								isUploading
-							}
-						/>
-						<Box mt="sm">
-							<Text variant="sm">
+					<Box
+						mt="xl"
+						p="lg"
+						borderRadius="lg"
+						style={{
+							background:
+								"#fff",
+							border: "1px solid rgba(0,0,0,0.06)",
+						}}
+					>
+						<Box
+							display="flex"
+							justifyContent="space-between"
+							alignItems="center"
+							flexWrap="wrap"
+							style={{
+								gap: 12,
+							}}
+							mb="md"
+						>
+							<Label mb="0">
+								Gallery images
+							</Label>
+							<Text
+								variant="sm"
+								color="grey60"
+							>
 								{
 									galleryImages.length
 								}
 								/10
-								images{" "}
 								{isUploading
-									? "(uploading...)"
+									? " · uploading…"
 									: ""}
 							</Text>
 						</Box>
+
+						<ImageDropzone
+							hint="Add up to 10 images, 4MB each. Drop multiple files at once."
+							multiple
+							compact
+							uploading={
+								isUploading
+							}
+							disabled={
+								galleryImages.length >=
+								10
+							}
+							onFiles={
+								processGalleryFiles
+							}
+							emptyTitle="Drop gallery images here"
+							emptySubtitle="or click to select files"
+						/>
 
 						{galleryImages.length ? (
 							<Box
 								mt="lg"
 								display="grid"
-								gridTemplateColumns="1fr"
-								gridGap="8px"
+								style={{
+									gridTemplateColumns:
+										"repeat(auto-fill, minmax(140px, 1fr))",
+									gap: 12,
+								}}
 							>
 								{galleryImages.map(
 									(
@@ -4863,69 +4895,83 @@ export default function ListingTabbedForm(
 									) => (
 										<Box
 											key={`${g.image_path}-${idx}`}
-											p="md"
-											border="1px solid"
-											borderColor="grey20"
-											borderRadius="default"
-											display="flex"
-											justifyContent="space-between"
-											alignItems="center"
+											borderRadius="lg"
+											overflow="hidden"
 											style={{
-												gap: 12,
+												position:
+													"relative",
+												border: "1px solid rgba(0,0,0,0.08)",
+												background:
+													"#fafafa",
 											}}
 										>
 											<Box
-												display="flex"
-												alignItems="center"
 												style={{
-													gap: 12,
+													aspectRatio:
+														"4 / 3",
+													background:
+														"#f4f4f5",
 												}}
 											>
 												<Box
 													as="img"
 													src={
 														g.publicUrl ||
-														`/admin/uploads-root/${encodeURIComponent(String(g.image_path).split("/").pop() || "")}`
+														toListingMediaUrl(
+															g.image_path,
+														)
 													}
 													alt={`Gallery ${idx + 1}`}
 													style={{
-														width: 88,
-														height: 56,
+														width: "100%",
+														height: "100%",
 														objectFit:
 															"cover",
-														borderRadius: 8,
-														border:
-															"1px solid rgba(0,0,0,0.08)",
+														display:
+															"block",
 													}}
 												/>
-												<Text variant="sm">
-													{
-														g.image_path
-													}
-												</Text>
 											</Box>
-											<Button
-												type="button"
-												variant="danger"
-												size="sm"
-												onClick={() =>
-													setGalleryImages(
-														(
-															prev,
-														) =>
-															prev.filter(
-																(
-																	_,
-																	i,
-																) =>
-																	i !==
-																	idx,
-															),
-													)
-												}
+											<Box
+												p="sm"
+												display="flex"
+												justifyContent="space-between"
+												alignItems="center"
+												style={{
+													gap: 8,
+												}}
 											>
-												Remove
-											</Button>
+												<Text
+													variant="sm"
+													color="grey60"
+												>
+													#
+													{idx +
+														1}
+												</Text>
+												<Button
+													type="button"
+													variant="danger"
+													size="sm"
+													onClick={() =>
+														setGalleryImages(
+															(
+																prev,
+															) =>
+																prev.filter(
+																	(
+																		_,
+																		i,
+																	) =>
+																		i !==
+																		idx,
+																),
+														)
+													}
+												>
+													Remove
+												</Button>
+											</Box>
 										</Box>
 									),
 								)}

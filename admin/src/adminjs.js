@@ -5,6 +5,7 @@ import NewAction from '../node_modules/adminjs/lib/backend/actions/new/new-actio
 import EditAction from '../node_modules/adminjs/lib/backend/actions/edit/edit-action.js'
 import Adapter, { Database, Resource } from '@adminjs/sql'
 import { dbPool } from './db.js'
+import { normalizeListingDatetime } from './components/listingDateUtils.js'
 
 AdminJS.registerAdapter({ Database, Resource })
 
@@ -63,6 +64,10 @@ export async function buildAdminJs() {
     ListingUnpublishDate: componentLoader.add(
       'ListingUnpublishDate',
       path.join(__dirname, 'components', 'ListingUnpublishDate.jsx')
+    ),
+    ListingScheduleDate: componentLoader.add(
+      'ListingScheduleDate',
+      path.join(__dirname, 'components', 'ListingScheduleDate.jsx')
     ),
     ListingTitleLarge: componentLoader.add(
       'ListingTitleLarge',
@@ -201,6 +206,11 @@ export async function buildAdminJs() {
         if (Object.prototype.hasOwnProperty.call(obj, key) && listingEmptyFormValue(obj[key])) {
           obj[key] = null
         }
+      }
+      for (const key of ['publish_at', 'unpublish_at']) {
+        if (!Object.prototype.hasOwnProperty.call(obj, key)) continue
+        const normalized = normalizeListingDatetime(obj[key])
+        obj[key] = normalized || null
       }
       if (!Object.prototype.hasOwnProperty.call(obj, 'is_featured') || listingEmptyFormValue(obj.is_featured)) {
         obj.is_featured = 0
@@ -922,12 +932,20 @@ export async function buildAdminJs() {
               props: { label: 'Featured item' },
             },
             publish_at: {
-              type: 'date',
-              components: { edit: Components.ListingPublishDate },
+              type: 'datetime',
+              components: {
+                edit: Components.ListingPublishDate,
+                list: Components.ListingScheduleDate,
+                show: Components.ListingScheduleDate,
+              },
             },
             unpublish_at: {
-              type: 'date',
-              components: { edit: Components.ListingUnpublishDate },
+              type: 'datetime',
+              components: {
+                edit: Components.ListingUnpublishDate,
+                list: Components.ListingScheduleDate,
+                show: Components.ListingScheduleDate,
+              },
             },
             description_html: { type: 'textarea', props: { rows: 12 } },
             banner_image: {
