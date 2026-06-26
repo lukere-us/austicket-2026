@@ -8,6 +8,8 @@ require_once __DIR__ . '/lib/jwt.php';
 require_once __DIR__ . '/lib/site_settings.php';
 require_once __DIR__ . '/lib/home_hero_settings.php';
 require_once __DIR__ . '/lib/home_listings_settings.php';
+require_once __DIR__ . '/lib/footer_settings.php';
+require_once __DIR__ . '/lib/blogs.php';
 require_once __DIR__ . '/lib/home_hero_stats.php';
 
 cors();
@@ -190,6 +192,13 @@ function listing_city_exists_sql(string $cityParam): string
 function attach_show_times_to_shows(PDO $pdo, array $shows): array
 {
   if (!count($shows)) return $shows;
+  if (!show_times_table_ready($pdo)) {
+    foreach ($shows as &$s) {
+      $s['times'] = [];
+    }
+    unset($s);
+    return $shows;
+  }
 
   $showIds = array_map(fn($s) => (string)$s['id'], $shows);
   $in = implode(',', array_fill(0, count($showIds), '?'));
@@ -272,14 +281,28 @@ function active_show_sql(string $alias = 's'): string
   return '1=1';
 }
 
-function listing_card_select_sql(): string
+function show_times_table_ready(PDO $pdo): bool
+{
+  static $ready = null;
+  if ($ready !== null) {
+    return $ready;
+  }
+
+  try {
+    $pdo->query('SELECT 1 FROM show_times LIMIT 1');
+    $ready = true;
+  } catch (Throwable) {
+    $ready = false;
+  }
+
+  return $ready;
+}
+
+function listing_card_select_sql(bool $withShowTimes = true): string
 {
   $activeSh = active_show_sql('sh');
-  return "
-    l.id, l.title, l.slug, l.banner_image, l.trailer_url, l.publish_at, l.created_at,
-    COALESCE(l.is_featured, 0) AS is_featured,
-    t.name AS type_name, t.slug AS type_slug,
-    (
+  $eventDateSql = $withShowTimes
+    ? "(
       SELECT COALESCE(
         (
           SELECT MIN(st.show_time)
@@ -293,7 +316,18 @@ function listing_card_select_sql(): string
           WHERE sh.listing_id = l.id AND $activeSh
         )
       )
-    ) AS event_date,
+    )"
+    : "(
+      SELECT MIN(sh.start_date)
+      FROM shows sh
+      WHERE sh.listing_id = l.id AND $activeSh
+    )";
+
+  return "
+    l.id, l.title, l.slug, l.banner_image, l.trailer_url, l.publish_at, l.created_at,
+    COALESCE(l.is_featured, 0) AS is_featured,
+    t.name AS type_name, t.slug AS type_slug,
+    {$eventDateSql} AS event_date,
     (
       SELECT CONCAT(p.name, ', ', c.name)
       FROM shows sh
@@ -316,8 +350,9 @@ function listing_card_select_sql(): string
 function fetch_listing_cards(PDO $pdo, array $extraWhere, array $params, string $orderBy, int $limit): array
 {
   $where = array_merge(listing_visible_where(), $extraWhere);
+  $withShowTimes = show_times_table_ready($pdo);
   $sql = "
-    SELECT " . listing_card_select_sql() . "
+    SELECT " . listing_card_select_sql($withShowTimes) . "
     FROM listings l
     JOIN types t ON t.id = l.type_id
     WHERE " . implode(' AND ', $where) . "
@@ -327,12 +362,26 @@ function fetch_listing_cards(PDO $pdo, array $extraWhere, array $params, string 
   $stmt = $pdo->prepare($sql);
   $stmt->execute($params);
   $rows = $stmt->fetchAll() ?: [];
+  if (!$withShowTimes) {
+    foreach ($rows as &$row) {
+      $row['upcoming_show_times'] = [];
+    }
+    unset($row);
+    return $rows;
+  }
   return attach_upcoming_show_times($pdo, $rows);
 }
 
 function attach_upcoming_show_times(PDO $pdo, array $items, int $limitPerListing = 4): array
 {
   if (count($items) === 0) {
+    return $items;
+  }
+  if (!show_times_table_ready($pdo)) {
+    foreach ($items as &$item) {
+      $item['upcoming_show_times'] = [];
+    }
+    unset($item);
     return $items;
   }
 
@@ -1158,6 +1207,62 @@ if ($method === 'GET' && $path === '/settings/home-listings') {
   header('Pragma: no-cache');
   $pdo = db();
   json_response(['settings' => load_home_listings_settings($pdo)]);
+}
+
+if ($method === 'GET' && $path === '/settings/footer') {
+  header('Cache-Control: no-store, no-cache, must-revalidate');
+  header('Pragma: no-cache');
+  $pdo = db();
+  json_response(['settings' => load_footer_settings($pdo)]);
+}
+
+if ($method === 'GET' && $path === '/blogs/home') {
+  header('Cache-Control: no-store, no-cache, must-revalidate');
+  header('Pragma: no-cache');
+  $pdo = db();
+  $limit = isset($_GET['limit']) ? max(2, min(8, (int)$_GET['limit'])) : 4;
+  json_response(fetch_home_blogs($pdo, $limit));
+}
+
+if ($method === 'GET' && $path === '/blogs') {
+  header('Cache-Control: no-store, no-cache, must-revalidate');
+  header('Pragma: no-cache');
+  $pdo = db();
+  $limit = isset($_GET['limit']) ? max(1, min(50, (int)$_GET['limit'])) : 12;
+  json_response(['items' => fetch_published_blogs($pdo, $limit)]);
+}
+
+if ($method === 'GET' && preg_match('#^/blogs/([^/]+)$#', $path, $m)) {
+  header('Cache-Control: no-store, no-cache, must-revalidate');
+  header('Pragma: no-cache');
+  $slug = $m[1];
+  $pdo = db();
+  $blog = fetch_blog_by_slug($pdo, $slug);
+  if (!$blog) {
+    json_response(['error' => 'not_found'], 404);
+  }
+
+  $country = isset($_GET['country']) ? trim((string)$_GET['country']) : '';
+  $recentBlogs = fetch_published_blogs($pdo, 6, (int)$blog['id']);
+  $eventWhere = ['1=1'];
+  $eventParams = [];
+  if ($country !== '') {
+    $eventWhere[] = 'co.name = :country';
+    $eventParams[':country'] = $country;
+  }
+  $recentEvents = fetch_listing_cards(
+    $pdo,
+    $eventWhere,
+    $eventParams,
+    'COALESCE(l.publish_at, l.created_at) DESC, l.id DESC',
+    6
+  );
+
+  json_response([
+    'blog' => $blog,
+    'recent_blogs' => $recentBlogs,
+    'recent_events' => $recentEvents,
+  ]);
 }
 
 json_response(['error' => 'not_found'], 404);

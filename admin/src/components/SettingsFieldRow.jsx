@@ -69,6 +69,27 @@ export function SettingsFieldRow({ field, value, onChange }) {
     )
   }
 
+  if (field.type === 'textarea') {
+    return (
+      <Box mb="lg">
+        <Label htmlFor={id}>{field.label}</Label>
+        <textarea
+          id={id}
+          name={field.key}
+          rows={field.rows || 4}
+          value={value ?? ''}
+          style={{ ...inputStyle, minHeight: 96, resize: 'vertical' }}
+          onChange={(e) => onChange(field.key, e.target.value)}
+        />
+        {field.help ? (
+          <Text variant="sm" color="grey60" mt="sm">
+            {field.help}
+          </Text>
+        ) : null}
+      </Box>
+    )
+  }
+
   const displayValue =
     field.type === 'number'
       ? value === null || value === undefined || Number.isNaN(Number(value))

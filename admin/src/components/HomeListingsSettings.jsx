@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNotice } from 'adminjs'
 import { Box, Button, H2, H4, Loader, Text } from '@adminjs/design-system'
+import FormSaveChrome from './FormSaveChrome.jsx'
 import { SettingsFieldRow } from './SettingsFieldRow.jsx'
 import { readHomeListingsFormValues } from '../lib/readSettingsForm.js'
 import {
@@ -120,12 +121,24 @@ export default function HomeListingsSettings() {
       ) : (
         <form
           key={formKey}
+          id="home-listings-settings-form"
           ref={formRef}
           onSubmit={(e) => {
             e.preventDefault()
             void onSave()
           }}
         >
+          <FormSaveChrome
+            formId="home-listings-settings-form"
+            saving={saving}
+            saveLabel="Save settings"
+            savingLabel="Saving…"
+            extraActions={
+              <Button type="button" variant="text" onClick={onReset} disabled={saving}>
+                Reset to defaults
+              </Button>
+            }
+          >
           <Box
             display="grid"
             style={{
@@ -152,15 +165,7 @@ export default function HomeListingsSettings() {
               </Box>
             ))}
           </Box>
-
-          <Box mt="xl" display="flex" gap="md">
-            <Button type="submit" variant="primary" disabled={saving}>
-              {saving ? 'Saving…' : 'Save settings'}
-            </Button>
-            <Button type="button" variant="text" onClick={onReset} disabled={saving}>
-              Reset to defaults
-            </Button>
-          </Box>
+          </FormSaveChrome>
         </form>
       )}
     </Box>

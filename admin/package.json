@@ -59,6 +59,7 @@
     "mysql": "^2.18.1",
     "mysql2": "^3.22.2",
     "photoswipe": "^5.4.4",
+    "react-datepicker": "^4.25.0",
     "react-quill": "^2.0.0",
     "sequelize": "^6.37.8"
   }

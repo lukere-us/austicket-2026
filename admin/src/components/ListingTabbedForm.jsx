@@ -16,7 +16,6 @@ import {
 import {
 	Box,
 	Button,
-	DatePicker,
 	H2,
 	Icon,
 	Input,
@@ -29,6 +28,9 @@ import StableModal from "./StableModal.jsx";
 import ImageDropzone from "./ImageDropzone.jsx";
 import ListingPublishDate from "./ListingPublishDate.jsx";
 import ListingUnpublishDate from "./ListingUnpublishDate.jsx";
+import ModernDatePicker from "./ModernDatePicker.jsx";
+import ModernTimePicker from "./ModernTimePicker.jsx";
+import FormSaveChrome from "./FormSaveChrome.jsx";
 import { normalizeListingDatetime } from "./listingDateUtils.js";
 
 function toListingMediaUrl(storedPath) {
@@ -330,30 +332,39 @@ function extractShowCalendarYmd(
 		: "";
 }
 
-function showDateToPickerIso(
+function parseShowBoundaryDate(
 	value,
 ) {
 	const ymd =
 		extractShowCalendarYmd(
 			value,
 		);
-	return ymd
-		? `${ymd}T00:00:00.000Z`
-		: "";
-}
-
-function parseShowBoundaryDate(
-	value,
-) {
-	const iso =
-		showDateToPickerIso(
-			value,
-		);
-	return iso
-		? new Date(
-				iso,
+	if (
+		!ymd
+	)
+		return undefined;
+	const [
+		y,
+		m,
+		d,
+	] =
+		ymd
+			.split(
+				"-",
 			)
-		: undefined;
+			.map(
+				Number,
+			);
+	return new Date(
+		y,
+		m -
+			1,
+		d,
+		12,
+		0,
+		0,
+		0,
+	);
 }
 
 function showsHaveUserInput(
@@ -3273,35 +3284,42 @@ export default function ListingTabbedForm(
 							return;
 						const showId =
 							s?.id;
-						const timesList =
-							await api.resourceAction(
-								{
-									resourceId:
-										"show_times",
-									actionName:
-										"list",
-									params:
-										{
-											"filters.show_id":
-												showId,
-											perPage: 500,
-											sortBy:
-												"show_time",
-											direction:
-												"asc",
-										},
-								},
-							);
-						const timeRecords =
-							Array.isArray(
-								timesList
-									?.data
-									?.records,
-							)
-								? timesList
-										.data
-										.records
-								: [];
+						let timeRecords =
+							[];
+						try {
+							const timesList =
+								await api.resourceAction(
+									{
+										resourceId:
+											"show_times",
+										actionName:
+											"list",
+										params:
+											{
+												"filters.show_id":
+													showId,
+												perPage: 500,
+												sortBy:
+													"show_time",
+												direction:
+													"asc",
+											},
+									},
+								);
+							timeRecords =
+								Array.isArray(
+									timesList
+										?.data
+										?.records,
+								)
+									? timesList
+											.data
+											.records
+									: [];
+						} catch {
+							timeRecords =
+								[];
+						}
 						shows.push(
 							{
 								__key:
@@ -4406,6 +4424,12 @@ export default function ListingTabbedForm(
 				</Button>
 			</Box>
 
+			<FormSaveChrome
+				onSave={onSave}
+				saving={isSaving}
+				saveLabel="Save"
+				savingLabel="Saving…"
+			>
 			{activeTab ===
 			"listing" ? (
 				<Box mt="xl">
@@ -5279,29 +5303,22 @@ export default function ListingTabbedForm(
 														Start
 														date
 													</Label>
-													<DatePicker
-														propertyType="date"
-														value={showDateToPickerIso(
-															s.start_date,
-														)}
+													<ModernDatePicker
+														value={
+															s.start_date
+														}
 														maxDate={parseShowBoundaryDate(
 															s.end_date,
 														)}
-														style={{
-															maxWidth: 300,
-															width:
-																"100%",
-														}}
+														placeholder="Start date"
 														onChange={(
-															iso,
+															sql,
 														) =>
 															updateShow(
 																showIdx,
 																"start_date",
-																iso
-																	? String(
-																			iso,
-																		).slice(
+																sql
+																	? sql.slice(
 																			0,
 																			10,
 																		)
@@ -5315,29 +5332,22 @@ export default function ListingTabbedForm(
 														End
 														date
 													</Label>
-													<DatePicker
-														propertyType="date"
-														value={showDateToPickerIso(
-															s.end_date,
-														)}
+													<ModernDatePicker
+														value={
+															s.end_date
+														}
 														minDate={parseShowBoundaryDate(
 															s.start_date,
 														)}
-														style={{
-															maxWidth: 300,
-															width:
-																"100%",
-														}}
+														placeholder="End date"
 														onChange={(
-															iso,
+															sql,
 														) =>
 															updateShow(
 																showIdx,
 																"end_date",
-																iso
-																	? String(
-																			iso,
-																		).slice(
+																sql
+																	? sql.slice(
 																			0,
 																			10,
 																		)
@@ -5468,28 +5478,14 @@ export default function ListingTabbedForm(
 																	Show
 																	time
 																</Label>
-																<Input
-																	type="time"
+																<ModernTimePicker
 																	value={
 																		t.show_time
-																			? String(
-																					t.show_time,
-																				).slice(
-																					11,
-																					16,
-																				)
-																			: ""
 																	}
+																	placeholder="Show time"
 																	onChange={(
-																		e,
+																		time,
 																	) => {
-																		const time =
-																			String(
-																				e
-																					.target
-																					.value ||
-																					"",
-																			).trim();
 																		if (
 																			!time
 																		) {
@@ -5518,11 +5514,6 @@ export default function ListingTabbedForm(
 																			"show_time",
 																			`${date} ${time}:00`,
 																		);
-																	}}
-																	style={{
-																		maxWidth: 300,
-																		width:
-																			"100%",
 																	}}
 																/>
 															</Box>
@@ -5569,6 +5560,7 @@ export default function ListingTabbedForm(
 					)}
 				</Box>
 			)}
+			</FormSaveChrome>
 
 			<ListingAddPlaceModal
 				isOpen={
@@ -5626,22 +5618,6 @@ export default function ListingTabbedForm(
 				}
 			/>
 
-			<Box mt="xxl">
-				<Button
-					type="button"
-					variant="primary"
-					onClick={
-						onSave
-					}
-					disabled={
-						isSaving
-					}
-				>
-					{isSaving
-						? "Saving…"
-						: "Save"}
-				</Button>
-			</Box>
 		</Box>
 	);
 }

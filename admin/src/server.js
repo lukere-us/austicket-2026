@@ -13,6 +13,8 @@ import os from 'os'
 import { buildAuthenticatedRouter } from '@adminjs/express'
 import { buildAdminJs } from './adminjs.js'
 import { dbPool, getDbConfig } from './db.js'
+import { ensureShowTimesTable } from './lib/ensureShowTimesTable.js'
+import { ensureBlogsSchema } from './lib/ensureBlogsSchema.js'
 import {
   homeHeroSettingFields,
   loadHomeHeroSettings,
@@ -23,7 +25,23 @@ import {
   loadHomeListingsSettings,
   saveHomeListingsSettings,
 } from './lib/homeListingsSettings.js'
+import {
+  footerSettingFields,
+  loadFooterSettings,
+  loadFooterCityOptions,
+  saveFooterSettings,
+} from './lib/footerSettings.js'
 import { parseSettingsBody } from './lib/parseSettingsBody.js'
+import { can, canAny, loadAdminPermissions } from './lib/adminPermissions.js'
+import { attachAdminSessionRefresh, sessionWithAdminRefresh } from './lib/refreshAdminSession.js'
+import { ADMIN_PERMISSION_KEYS } from './lib/adminPermissions.shared.js'
+import {
+  createRoleWithPermissions,
+  fetchRoleById,
+  fetchRolePermissionKeys,
+  isMainAdminRoleName,
+  updateRoleWithPermissions,
+} from './lib/rolePermissions.server.js'
 
 dotenv.config()
 
@@ -70,7 +88,7 @@ async function authenticate(email, password) {
   const pool = dbPool()
   const [rows] = await pool.execute(
     `
-      SELECT a.id, a.name, a.email, a.password_hash, a.is_active, r.name AS role_name
+      SELECT a.id, a.name, a.email, a.password_hash, a.is_active, a.role_id, r.name AS role_name
       FROM admins a
       JOIN admin_roles r ON r.id = a.role_id
       WHERE a.email = ?
@@ -84,11 +102,15 @@ async function authenticate(email, password) {
   if (Number(admin.is_active) !== 1) return null
   if (!bcrypt.compareSync(String(password), String(admin.password_hash))) return null
 
+  const permissions = await loadAdminPermissions(pool, admin.role_id, admin.role_name)
+
   return {
     id: admin.id,
     email: admin.email,
     title: admin.name,
     role: admin.role_name,
+    roleId: admin.role_id,
+    permissions,
   }
 }
 
@@ -98,6 +120,9 @@ async function start() {
   }
 
   const app = express()
+
+  await ensureShowTimesTable(dbPool())
+  await ensureBlogsSchema(dbPool())
 
   app.use((req, res, next) => {
     const startAt = Date.now()
@@ -134,9 +159,84 @@ async function start() {
   // Serve uploaded media from repo-root /Upload
   app.use(`${adminJs.options.rootPath}/uploads-root`, express.static(UPLOAD_DIR))
 
+  const cfg = getDbConfig()
+  const sequelize = new Sequelize(cfg.database, cfg.user, cfg.password, {
+    host: cfg.host,
+    dialect: 'mysql',
+    logging: false,
+    timezone: '+00:00',
+  })
+
+  const SequelizeStore = SequelizeStoreFactory(session.Store)
+  const store = new SequelizeStore({ db: sequelize })
+  await store.sync()
+
+  const sessionOptions = {
+    store,
+    resave: false,
+    saveUninitialized: false,
+    secret: process.env.SESSION_SECRET || 'change-me',
+    name: 'aus_admin',
+    cookie: {
+      httpOnly: true,
+      sameSite: 'lax',
+    },
+  }
+
+  const sessionMiddleware = session(sessionOptions)
+  const adminSessionMiddleware = sessionWithAdminRefresh(sessionMiddleware)
+
+  function requireAdminApi(req, res, next) {
+    if (req.session?.adminUser) return next()
+    res.status(401).json({ error: 'unauthorized' })
+  }
+
+  function requirePermission(permissionKey) {
+    return (req, res, next) => {
+      const admin = req.session?.adminUser
+      if (!admin) {
+        res.status(401).json({ error: 'unauthorized' })
+        return
+      }
+      if (!can(admin, permissionKey)) {
+        res.status(403).json({ error: 'forbidden' })
+        return
+      }
+      next()
+    }
+  }
+
+  function requireUploadPermission(req, res, next) {
+    return requirePermission('uploads.use')(req, res, next)
+  }
+
+  function requireAnyPermission(...permissionKeys) {
+    return (req, res, next) => {
+      const admin = req.session?.adminUser
+      if (!admin) {
+        res.status(401).json({ error: 'unauthorized' })
+        return
+      }
+      if (!canAny(admin, permissionKeys)) {
+        res.status(403).json({ error: 'forbidden' })
+        return
+      }
+      next()
+    }
+  }
+
+  function jsonNoCache(res, payload) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
+    res.setHeader('Pragma', 'no-cache')
+    res.setHeader('Expires', '0')
+    res.status(200).type('json').send(JSON.stringify(payload))
+  }
+
   // Upload endpoint for listing media (banner + gallery)
   app.post(
     `${adminJs.options.rootPath}/api/uploads/listing-media`,
+    sessionMiddleware,
+    requireUploadPermission,
     formidableMiddleware({
       multiples: true,
       maxFileSize: 4 * 1024 * 1024, // 4MB
@@ -189,6 +289,8 @@ async function start() {
   // Upload endpoint for cast image (single)
   app.post(
     `${adminJs.options.rootPath}/api/uploads/cast-image`,
+    sessionMiddleware,
+    requireUploadPermission,
     formidableMiddleware({
       multiples: false,
       maxFileSize: 4 * 1024 * 1024, // 4MB
@@ -239,6 +341,8 @@ async function start() {
   // Upload endpoint for country flags (single)
   app.post(
     `${adminJs.options.rootPath}/api/uploads/flag-image`,
+    sessionMiddleware,
+    requireUploadPermission,
     formidableMiddleware({
       multiples: false,
       maxFileSize: 4 * 1024 * 1024, // 4MB
@@ -289,6 +393,8 @@ async function start() {
   // Upload endpoint for promotion image (single)
   app.post(
     `${adminJs.options.rootPath}/api/uploads/promotion-image`,
+    sessionMiddleware,
+    requireUploadPermission,
     formidableMiddleware({
       multiples: false,
       maxFileSize: 4 * 1024 * 1024, // 4MB
@@ -333,49 +439,62 @@ async function start() {
     }
   )
 
-  const cfg = getDbConfig()
-  const sequelize = new Sequelize(cfg.database, cfg.user, cfg.password, {
-    host: cfg.host,
-    dialect: 'mysql',
-    logging: false,
-    timezone: '+00:00',
-  })
+  app.post(
+    `${adminJs.options.rootPath}/api/uploads/blog-cover`,
+    sessionMiddleware,
+    requireUploadPermission,
+    formidableMiddleware({
+      multiples: false,
+      maxFileSize: 4 * 1024 * 1024,
+      uploadDir: os.tmpdir(),
+    }),
+    async (req, res) => {
+      try {
+        const file = req.files?.file ?? req.files?.image ?? req.files?.files ?? null
+        const f = Array.isArray(file) ? file[0] : file
+        if (!f) return res.status(400).json({ error: 'No file uploaded' })
 
-  const SequelizeStore = SequelizeStoreFactory(session.Store)
-  const store = new SequelizeStore({ db: sequelize })
-  await store.sync()
+        const type = String(f?.type || '')
+        if (!type.startsWith('image/')) {
+          return res.status(400).json({ error: 'Only image uploads are allowed' })
+        }
+        const size = Number(f?.size || 0)
+        if (size > 4 * 1024 * 1024) {
+          return res.status(400).json({ error: 'File must be <= 4MB' })
+        }
 
-  const sessionOptions = {
-    store,
-    resave: false,
-    saveUninitialized: false,
-    secret: process.env.SESSION_SECRET || 'change-me',
-    name: 'aus_admin',
-    cookie: {
-      httpOnly: true,
-      sameSite: 'lax',
-    },
-  }
+        const blogDir = path.join(UPLOAD_DIR, 'blogs')
+        await fs.mkdir(blogDir, { recursive: true })
 
-  const sessionMiddleware = session(sessionOptions)
+        const orig = String(f?.name || 'image')
+        const ext = path.extname(orig).slice(0, 10) || '.jpg'
+        const safeExt = ext.replace(/[^.\w]/g, '')
+        const name = `blog_${Date.now()}_${Math.random().toString(16).slice(2)}${safeExt}`
+        const destAbs = path.join(blogDir, name)
+        const tmp = f?.path
+        if (!tmp) return res.status(400).json({ error: 'Invalid upload' })
+        await moveFile(tmp, destAbs)
 
-  function requireAdminApi(req, res, next) {
-    if (req.session?.adminUser) return next()
-    res.status(401).json({ error: 'unauthorized' })
-  }
-
-  function jsonNoCache(res, payload) {
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
-    res.setHeader('Pragma', 'no-cache')
-    res.setHeader('Expires', '0')
-    res.status(200).type('json').send(JSON.stringify(payload))
-  }
+        res.json({
+          file: {
+            fileName: name,
+            publicUrl: `${adminJs.options.rootPath}/uploads-root/${encodeURIComponent(`blogs/${name}`)}`,
+            storedPath: `Upload/blogs/${name}`,
+          },
+        })
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('upload error', e)
+        res.status(500).json({ error: e?.message || String(e) })
+      }
+    }
+  )
 
   // Settings API lives outside AdminJS formidable router so JSON bodies parse correctly.
   const settingsApi = express.Router()
   settingsApi.use(express.json({ limit: '256kb' }))
 
-  settingsApi.get('/home-hero', async (_req, res) => {
+  settingsApi.get('/home-hero', requirePermission('pages.sliderBanner'), async (_req, res) => {
     try {
       const pool = dbPool()
       jsonNoCache(res, {
@@ -387,7 +506,7 @@ async function start() {
     }
   })
 
-  settingsApi.post('/home-hero', async (req, res) => {
+  settingsApi.post('/home-hero', requirePermission('pages.sliderBanner'), async (req, res) => {
     try {
       const pool = dbPool()
       const input = parseSettingsBody(req)
@@ -408,7 +527,7 @@ async function start() {
     }
   })
 
-  settingsApi.get('/home-listings', async (_req, res) => {
+  settingsApi.get('/home-listings', requirePermission('pages.homeListings'), async (_req, res) => {
     try {
       const pool = dbPool()
       jsonNoCache(res, {
@@ -420,7 +539,7 @@ async function start() {
     }
   })
 
-  settingsApi.post('/home-listings', async (req, res) => {
+  settingsApi.post('/home-listings', requirePermission('pages.homeListings'), async (req, res) => {
     try {
       const pool = dbPool()
       const settings = await saveHomeListingsSettings(pool, parseSettingsBody(req))
@@ -434,11 +553,89 @@ async function start() {
     }
   })
 
+  settingsApi.get('/footer', requireAnyPermission('pages.footer', 'pages.homeListings', 'pages.sliderBanner'), async (_req, res) => {
+    try {
+      const pool = dbPool()
+      jsonNoCache(res, {
+        settings: await loadFooterSettings(pool),
+        fields: footerSettingFields(),
+        cities: await loadFooterCityOptions(pool),
+      })
+    } catch (e) {
+      res.status(500).json({ error: e?.message || String(e) })
+    }
+  })
+
+  settingsApi.post('/footer', requireAnyPermission('pages.footer', 'pages.homeListings', 'pages.sliderBanner'), async (req, res) => {
+    try {
+      const pool = dbPool()
+      const settings = await saveFooterSettings(pool, parseSettingsBody(req))
+      jsonNoCache(res, {
+        settings,
+        fields: footerSettingFields(),
+        cities: await loadFooterCityOptions(pool),
+        notice: { message: 'Footer settings saved.', type: 'success' },
+      })
+    } catch (e) {
+      res.status(500).json({ error: e?.message || String(e) })
+    }
+  })
+
   app.use(
     `${adminJs.options.rootPath}/api/settings`,
-    sessionMiddleware,
+    adminSessionMiddleware,
     requireAdminApi,
     settingsApi,
+  )
+
+  const rolesApi = express.Router()
+  rolesApi.use(express.json({ limit: '256kb' }))
+
+  rolesApi.get('/:id', requireAnyPermission('admin_roles.show', 'admin_roles.edit'), async (req, res) => {
+    try {
+      const pool = dbPool()
+      const role = await fetchRoleById(pool, req.params.id)
+      if (!role) {
+        res.status(404).json({ error: 'Role not found' })
+        return
+      }
+      const isMainAdmin = isMainAdminRoleName(role.name)
+      const allowedKeys = isMainAdmin
+        ? ADMIN_PERMISSION_KEYS
+        : await fetchRolePermissionKeys(pool, role.id)
+      jsonNoCache(res, { role, allowedKeys, isMainAdmin })
+    } catch (e) {
+      res.status(500).json({ error: e?.message || String(e) })
+    }
+  })
+
+  rolesApi.post('/', requirePermission('admin_roles.new'), async (req, res) => {
+    try {
+      const pool = dbPool()
+      const { name, allowedKeys } = req.body || {}
+      const result = await createRoleWithPermissions(pool, name, allowedKeys)
+      jsonNoCache(res, result)
+    } catch (e) {
+      res.status(400).json({ error: e?.message || String(e) })
+    }
+  })
+
+  rolesApi.put('/:id', requirePermission('admin_roles.edit'), async (req, res) => {
+    try {
+      const pool = dbPool()
+      const { name, allowedKeys } = req.body || {}
+      const result = await updateRoleWithPermissions(pool, req.params.id, name, allowedKeys)
+      jsonNoCache(res, result)
+    } catch (e) {
+      res.status(400).json({ error: e?.message || String(e) })
+    }
+  })
+
+  app.use(
+    `${adminJs.options.rootPath}/api/roles`,
+    adminSessionMiddleware,
+    requireAdminApi,
+    rolesApi,
   )
 
   const adminRouter = buildAuthenticatedRouter(
@@ -451,6 +648,7 @@ async function start() {
     null,
     sessionOptions,
   )
+  attachAdminSessionRefresh(adminRouter)
 
   app.use(adminJs.options.rootPath, adminRouter)
   app.use(`${adminJs.options.rootPath}/assets`, express.static(path.join(__dirname, '..', 'public', 'assets')))

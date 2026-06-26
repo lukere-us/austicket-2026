@@ -1,11 +1,11 @@
 import React from 'react'
-import { DatePicker, Label } from '@adminjs/design-system'
+import { Label } from '@adminjs/design-system'
 import {
   listingDatePickerBoundary,
-  listingDatePickerIso,
-  listingDatetimeFromPicker,
   normalizeListingDatetime,
+  listingDatetimeFromPicker,
 } from './listingDateUtils.js'
+import ModernDatePicker from './ModernDatePicker.jsx'
 
 export default function ListingPublishDate(props) {
   const { property, record, onChange } = props
@@ -17,13 +17,11 @@ export default function ListingPublishDate(props) {
   return (
     <div style={{ maxWidth: '100%' }}>
       <Label>{property?.label || 'Publish at'}</Label>
-      <DatePicker
-        propertyType="date"
-        value={listingDatePickerIso(value)}
+      <ModernDatePicker
+        value={value}
         maxDate={unpublish || undefined}
-        onChange={(iso) => {
-          onChange(path, listingDatetimeFromPicker(iso))
-        }}
+        placeholder="When to publish"
+        onChange={(next) => onChange(path, next)}
       />
     </div>
   )

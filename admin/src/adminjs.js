@@ -6,6 +6,13 @@ import EditAction from '../node_modules/adminjs/lib/backend/actions/edit/edit-ac
 import Adapter, { Database, Resource } from '@adminjs/sql'
 import { dbPool } from './db.js'
 import { normalizeListingDatetime } from './components/listingDateUtils.js'
+import { applyPermissionsToResourceOptions, can, canAny, canAccessPage, isMainAdminRole } from './lib/adminPermissions.js'
+import { ADMIN_PERMISSION_KEYS } from './lib/adminPermissions.shared.js'
+import {
+  fetchRoleById,
+  fetchRolePermissionKeys,
+  isMainAdminRoleName,
+} from './lib/rolePermissions.server.js'
 
 AdminJS.registerAdapter({ Database, Resource })
 
@@ -85,6 +92,23 @@ export async function buildAdminJs() {
       'HomeListingsSettings',
       path.join(__dirname, 'components', 'HomeListingsSettings.jsx')
     ),
+    FooterSettings: componentLoader.add(
+      'FooterSettings',
+      path.join(__dirname, 'components', 'FooterSettings.jsx')
+    ),
+    BlogCoverUpload: componentLoader.add(
+      'BlogCoverUpload',
+      path.join(__dirname, 'components', 'BlogCoverUpload.jsx')
+    ),
+    BlogTitleWithSlug: componentLoader.add(
+      'BlogTitleWithSlug',
+      path.join(__dirname, 'components', 'BlogTitleWithSlug.jsx')
+    ),
+    BlogEditForm: componentLoader.add('BlogEditForm', path.join(__dirname, 'components', 'BlogEditForm.jsx')),
+    RolePermissionsForm: componentLoader.add(
+      'RolePermissionsForm',
+      path.join(__dirname, 'components', 'RolePermissionsForm.jsx')
+    ),
   }
 
   const databaseName = process.env.DB_NAME || 'aus-booking'
@@ -94,6 +118,88 @@ export async function buildAdminJs() {
     password: process.env.DB_PASSWORD || '',
     database: databaseName,
   }).init()
+
+  let adminRoleChoices = []
+  try {
+    const pool = dbPool()
+    const [rows] = await pool.execute(`SELECT id, name FROM admin_roles ORDER BY name ASC`)
+    adminRoleChoices = (rows || []).map((row) => ({
+      value: Number(row.id),
+      label: String(row.name),
+    }))
+  } catch {
+    adminRoleChoices = []
+  }
+
+  /** Attach permission keys to role edit record JSON (avoids client fetch loop). */
+  async function enrichRolePermissionsRecord(response, context) {
+    if (!response?.record) return response
+
+    let recordJson = response.record
+    if (recordJson && typeof recordJson.toJSON === 'function') {
+      try {
+        recordJson = recordJson.toJSON(context.currentAdmin)
+      } catch {
+        recordJson = { ...recordJson }
+      }
+    }
+
+    const roleId =
+      recordJson?.id ??
+      recordJson?.params?.id ??
+      context?.record?.id ??
+      context?.request?.params?.recordId
+
+    if (!roleId) return response
+
+    const pool = dbPool()
+    const role = await fetchRoleById(pool, roleId)
+    if (!role) return response
+
+    const isMain = isMainAdminRoleName(role.name)
+    const allowedKeys = isMain
+      ? ADMIN_PERMISSION_KEYS
+      : await fetchRolePermissionKeys(pool, roleId)
+
+    return {
+      ...response,
+      record: {
+        ...recordJson,
+        params: {
+          ...(recordJson.params || {}),
+          name: role.name,
+          _roleAllowedKeys: JSON.stringify(allowedKeys),
+          _roleIsMainAdmin: isMain ? '1' : '0',
+        },
+      },
+    }
+  }
+
+  function res(tableName, options, extraActions = []) {
+    return {
+      resource: db.table(tableName),
+      options: applyPermissionsToResourceOptions(options, tableName, extraActions),
+    }
+  }
+
+  /** Legacy table — permissions are edited on the Roles form; keep resource registered but fully hidden. */
+  function resHidden(tableName) {
+    const block = { isAccessible: () => false, isVisible: false }
+    return {
+      resource: db.table(tableName),
+      options: {
+        navigation: false,
+        actions: {
+          list: block,
+          show: block,
+          new: block,
+          edit: block,
+          delete: block,
+          bulkDelete: block,
+        },
+      },
+    }
+  }
 
   /** Not a DB column — only for the custom form; must be removed before SQL insert/update. */
   function stashListingShowsPayload(request) {
@@ -445,6 +551,58 @@ export async function buildAdminJs() {
     }
   }
 
+  function slugifyBlogTitle(title) {
+    return String(title || '')
+      .trim()
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 220)
+  }
+
+  function ensureBlogSlug(request) {
+    if (!request?.payload || typeof request.payload !== 'object') return
+    const title = String(request.payload.title || '').trim()
+    const slug = String(request.payload.slug || '').trim()
+    if (!slug && title) {
+      request.payload.slug = slugifyBlogTitle(title)
+    }
+    if (request.fields && typeof request.fields === 'object') {
+      const fieldsSlug = String(request.fields.slug || '').trim()
+      if (!fieldsSlug && title) {
+        request.fields.slug = slugifyBlogTitle(title)
+      }
+    }
+  }
+
+  const BLOG_REMOVED_FIELDS = ['publish_at', 'unpublish_at', 'sort_order']
+
+  function prepareBlogRequest(request) {
+    if (!request) return
+    const strip = (obj) => {
+      if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return
+      for (const key of BLOG_REMOVED_FIELDS) {
+        delete obj[key]
+      }
+      if (!Object.prototype.hasOwnProperty.call(obj, 'is_featured') || listingEmptyFormValue(obj.is_featured)) {
+        obj.is_featured = 0
+      } else if (
+        obj.is_featured === true ||
+        obj.is_featured === 'true' ||
+        obj.is_featured === '1' ||
+        obj.is_featured === 1
+      ) {
+        obj.is_featured = 1
+      } else {
+        obj.is_featured = 0
+      }
+    }
+    strip(request.payload)
+    strip(request.fields)
+  }
+
   function ensureListingAuditAdmins(request, context, { isNew }) {
     const adminId = context?.currentAdmin?.id
     if (!adminId) return
@@ -758,16 +916,21 @@ export async function buildAdminJs() {
         en: {
           labels: {
             pages: 'Site settings',
+            admins: 'Admin users',
+            admin_roles: 'Roles',
+            admin_role_permissions: 'Role permissions (legacy)',
           },
           pages: {
             sliderBanner: 'Slider & Banner',
             homeListings: 'Homepage listings',
+            footer: 'Footer settings',
           },
         },
       },
     },
     assets: {
-      styles: ['/admin/assets/admin-custom.css'],
+      styles: ['/admin/assets/react-datepicker.min.css', '/admin/assets/admin-custom.css'],
+      scripts: ['/admin/assets/admin-form-actions.js'],
     },
     dashboard: {
       component: Components.DashboardTiles,
@@ -798,116 +961,140 @@ export async function buildAdminJs() {
     componentLoader,
     pages: {
       sliderBanner: {
-        icon: 'Image',
+        icon: 'Slideshow',
         component: Components.SliderBannerSettings,
+        isAccessible: ({ currentAdmin }) => canAccessPage(currentAdmin, 'sliderBanner'),
       },
       homeListings: {
-        icon: 'List',
+        icon: 'ViewList',
         component: Components.HomeListingsSettings,
+        isAccessible: ({ currentAdmin }) => canAccessPage(currentAdmin, 'homeListings'),
+      },
+      footer: {
+        icon: 'Menu',
+        component: Components.FooterSettings,
+        isAccessible: ({ currentAdmin }) =>
+          canAny(currentAdmin, ['pages.footer', 'pages.homeListings', 'pages.sliderBanner']),
       },
     },
     resources: [
-      {
-        resource: db.table('admins'),
-        options: {
-          navigation: { name: 'Admin', icon: 'User' },
-          properties: {
-            password_hash: { isVisible: false },
-            created_at: { isVisible: false },
-            updated_at: { isVisible: false },
-          },
-          actions: {
-            new: { isAccessible: ({ currentAdmin }) => currentAdmin?.role === 'main_admin' },
-            edit: { isAccessible: ({ currentAdmin }) => currentAdmin?.role === 'main_admin' },
-            delete: { isAccessible: ({ currentAdmin }) => currentAdmin?.role === 'main_admin' },
+      res('admins', {
+        navigation: { name: 'Admin', icon: 'User' },
+        listProperties: ['name', 'email', 'role_id', 'is_active'],
+        properties: {
+          password_hash: { isVisible: false },
+          created_at: { isVisible: false },
+          updated_at: { isVisible: false },
+          is_active: { type: 'boolean' },
+          role_id: {
+            availableValues: adminRoleChoices,
+            isRequired: true,
           },
         },
-      },
-      {
-        resource: db.table('admin_roles'),
-        options: {
-          navigation: { name: 'Admin', icon: 'Settings' },
-          properties: { created_at: { isVisible: false }, updated_at: { isVisible: false } },
-          actions: {
-            new: { isAccessible: ({ currentAdmin }) => currentAdmin?.role === 'main_admin' },
-            edit: { isAccessible: ({ currentAdmin }) => currentAdmin?.role === 'main_admin' },
-            delete: { isAccessible: ({ currentAdmin }) => currentAdmin?.role === 'main_admin' },
+      }),
+      res('admin_roles', {
+        navigation: { name: 'Admin', icon: 'Shield' },
+        listProperties: ['name'],
+        properties: {
+          name: {
+            isTitle: true,
+            isVisible: { list: true, show: true, edit: false, new: false, filter: true },
           },
+          created_at: { isVisible: false },
+          updated_at: { isVisible: false },
         },
-      },
-      {
-        resource: db.table('admin_role_permissions'),
-        options: {
-          navigation: { name: 'Admin', icon: 'Settings' },
-          properties: { created_at: { isVisible: false }, updated_at: { isVisible: false } },
-          actions: {
-            new: { isAccessible: ({ currentAdmin }) => currentAdmin?.role === 'main_admin' },
-            edit: { isAccessible: ({ currentAdmin }) => currentAdmin?.role === 'main_admin' },
-            delete: { isAccessible: ({ currentAdmin }) => currentAdmin?.role === 'main_admin' },
+        actions: {
+          list: { isVisible: true },
+          show: {
+            isAccessible: ({ currentAdmin }) => can(currentAdmin, 'admin_roles.list'),
+            isVisible: false,
           },
-        },
-      },
-      {
-        resource: db.table('users'),
-        options: {
-          navigation: { name: 'Users', icon: 'User' },
-          properties: {
-            password_hash: { isVisible: false },
-            is_blocked: { type: 'boolean' },
-            created_at: { isVisible: false },
-            updated_at: { isVisible: false },
+          show: {
+            isVisible: false,
           },
-        },
-      },
-      {
-        resource: db.table('casts'),
-        options: {
-          navigation: { name: 'Users', icon: 'User' },
-          sort: { sortBy: 'created_at', direction: 'desc' },
-          listProperties: ['image_path', 'name', 'position', 'facebook_url', 'instagram_url', 'tiktok_url', 'wikipedia_url'],
-          properties: hideAuditProperties({
-            image_path: {
-              components: {
-                list: Components.CastImageUpload,
-                show: Components.CastImageUpload,
-                edit: Components.CastImageUpload,
-              },
+          new: {
+            isVisible: true,
+            component: Components.RolePermissionsForm,
+            handler: async (request, response, context) => {
+              if (String(request.method || '').toLowerCase() === 'get') {
+                return NewAction.handler(request, response, context)
+              }
+              return response
             },
-            name: {
-              components: {
-                edit: Components.CastNameWithDuplicateHint,
-              },
+          },
+          edit: {
+            isVisible: true,
+            component: Components.RolePermissionsForm,
+            handler: async (request, response, context) => {
+              if (String(request.method || '').toLowerCase() === 'get') {
+                const result = await EditAction.handler(request, response, context)
+                return enrichRolePermissionsRecord(result, context)
+              }
+              return response
             },
-            description: { type: 'textarea', props: { rows: 8 } },
-          }),
-        },
-      },
-      {
-        resource: db.table('listing_casts'),
-        options: {
-          navigation: null,
-          properties: {
-            listing_id: { reference: 'listings' },
-            cast_id: { reference: 'casts' },
-            created_at: { isVisible: false },
           },
-          actions: {
-            list: { isVisible: false },
-            show: { isVisible: false },
-            new: { isVisible: false },
-            edit: { isVisible: false },
-            delete: { isVisible: false },
-            bulkDelete: { isVisible: false },
+          delete: {
+            isAccessible: ({ currentAdmin, record }) => {
+              if (!can(currentAdmin, 'admin_roles.delete')) return false
+              const name = String(record?.params?.name ?? record?.title ?? '').trim()
+              return !isMainAdminRole(name)
+            },
           },
         },
-      },
-      {
-        resource: db.table('types'),
-        options: { navigation: { name: 'Content', icon: 'Catalog' }, properties: { created_at: { isVisible: false }, updated_at: { isVisible: false } } },
-      },
-      {
-        resource: db.table('listings'),
-        options: {
+      }),
+      resHidden('admin_role_permissions'),
+      res('users', {
+        navigation: { name: 'Users', icon: 'User' },
+        properties: {
+          password_hash: { isVisible: false },
+          is_blocked: { type: 'boolean' },
+          created_at: { isVisible: false },
+          updated_at: { isVisible: false },
+        },
+      }),
+      res('casts', {
+        navigation: { name: 'Users', icon: 'User' },
+        sort: { sortBy: 'created_at', direction: 'desc' },
+        listProperties: ['image_path', 'name', 'position', 'facebook_url', 'instagram_url', 'tiktok_url', 'wikipedia_url'],
+        properties: hideAuditProperties({
+          image_path: {
+            components: {
+              list: Components.CastImageUpload,
+              show: Components.CastImageUpload,
+              edit: Components.CastImageUpload,
+            },
+          },
+          name: {
+            components: {
+              edit: Components.CastNameWithDuplicateHint,
+            },
+          },
+          description: { type: 'textarea', props: { rows: 8 } },
+        }),
+      }),
+      res('listing_casts', {
+        navigation: null,
+        properties: {
+          listing_id: { reference: 'listings' },
+          cast_id: { reference: 'casts' },
+          created_at: { isVisible: false },
+        },
+        actions: {
+          list: { isVisible: false },
+          show: { isVisible: false },
+          new: { isVisible: false },
+          edit: { isVisible: false },
+          delete: { isVisible: false },
+          bulkDelete: { isVisible: false },
+        },
+      }),
+      res('types', {
+        navigation: { name: 'Content', icon: 'Catalog' },
+        properties: { created_at: { isVisible: false }, updated_at: { isVisible: false } },
+      }),
+      res(
+        'listings',
+        {
           navigation: { name: 'Content', icon: 'Movie' },
           sort: { sortBy: 'created_at', direction: 'desc' },
           listProperties: ['banner_image', 'title', 'slug', 'type_id', 'status', 'publish_at', 'unpublish_at'],
@@ -1040,10 +1227,9 @@ export async function buildAdminJs() {
             },
           },
         },
-      },
-      {
-        resource: db.table('promotions'),
-        options: {
+        ['duplicate']
+      ),
+      res('promotions', {
           navigation: { name: 'Content', icon: 'Gift' },
           listProperties: [
             'image_path',
@@ -1107,112 +1293,237 @@ export async function buildAdminJs() {
               },
             },
           },
-        },
-      },
-      {
-        resource: db.table('listing_gallery_images'),
-        options: {
-          navigation: { name: 'Content', icon: 'Image' },
-          sort: { sortBy: 'created_at', direction: 'desc' },
-          properties: {
-            listing_id: { reference: 'listings' },
-            image_path: {
-              components: {
-                list: Components.ImageThumb,
-                show: Components.ImageThumb,
-                edit: Components.GalleryImageUpload,
-              },
+      }),
+      res('blogs', {
+        navigation: { name: 'Content', icon: 'Article' },
+        listProperties: [
+          'cover_image',
+          'title',
+          'slug',
+          'author_name',
+          'status',
+          'is_featured',
+        ],
+        editProperties: [
+          'title',
+          'excerpt',
+          'body_html',
+          'cover_image',
+          'author_name',
+          'tags',
+          'status',
+          'is_featured',
+        ],
+        newProperties: [
+          'title',
+          'excerpt',
+          'body_html',
+          'cover_image',
+          'author_name',
+          'tags',
+          'status',
+          'is_featured',
+        ],
+        showProperties: [
+          'cover_image',
+          'title',
+          'slug',
+          'excerpt',
+          'body_html',
+          'author_name',
+          'tags',
+          'status',
+          'is_featured',
+        ],
+        filterProperties: ['status', 'is_featured', 'author_name'],
+        properties: {
+          created_at: { isVisible: { list: false, show: false, edit: false, new: false, filter: false } },
+          updated_at: { isVisible: { list: false, show: false, edit: false, new: false, filter: false } },
+          created_by_admin_id: {
+            isVisible: { list: false, show: false, edit: false, new: false, filter: false },
+            reference: 'admins',
+          },
+          updated_by_admin_id: {
+            isVisible: { list: false, show: false, edit: false, new: false, filter: false },
+            reference: 'admins',
+          },
+          title: {
+            components: {
+              edit: Components.BlogTitleWithSlug,
+              new: Components.BlogTitleWithSlug,
             },
-            created_at: { isVisible: false },
           },
-          actions: {
-            list: { component: Components.ListingGalleryGrid, perPage: 20 },
+          slug: {
+            isVisible: { list: true, show: true, edit: false, new: false, filter: false },
           },
-        },
-      },
-      {
-        resource: db.table('listing_related'),
-        options: { navigation: { name: 'Content', icon: 'Link' }, properties: { created_at: { isVisible: false } } },
-      },
-
-      {
-        resource: db.table('countries'),
-        options: {
-          navigation: { name: 'Locations', icon: 'Map' },
-          listProperties: ['flag_image_path', 'name', 'code'],
-          properties: {
-            flag_image_path: {
-              components: {
-                list: Components.FlagImageUpload,
-                show: Components.FlagImageUpload,
-                edit: Components.FlagImageUpload,
-              },
+          excerpt: { type: 'textarea', props: { rows: 3 } },
+          body_html: { type: 'richtext' },
+          tags: {
+            props: { placeholder: 'Design, Research, Interviews' },
+            description: 'Comma-separated tags shown on the blog card and detail page.',
+          },
+          author_name: { props: { defaultValue: 'Admin' } },
+          is_featured: { type: 'boolean', props: { defaultValue: true } },
+          cover_image: {
+            components: {
+              list: Components.BlogCoverUpload,
+              show: Components.BlogCoverUpload,
+              edit: Components.BlogCoverUpload,
             },
-            created_at: { isVisible: false },
-            updated_at: { isVisible: false },
           },
         },
-      },
-      { resource: db.table('states'), options: { navigation: { name: 'Locations', icon: 'Map' }, properties: { created_at: { isVisible: false }, updated_at: { isVisible: false } } } },
-      { resource: db.table('cities'), options: { navigation: { name: 'Locations', icon: 'Map' }, properties: { created_at: { isVisible: false }, updated_at: { isVisible: false } } } },
-      {
-        resource: db.table('places'),
-        options: {
-          navigation: { name: 'Locations', icon: 'Pin' },
-          listProperties: ['name', 'city_id', 'address', 'google_map_link'],
-          properties: {
-            name: {
-              components: {
-                edit: Components.PlaceNameWithDuplicateHint,
-              },
+        actions: {
+          show: {
+            isVisible: false,
+          },
+          new: {
+            component: Components.BlogEditForm,
+            hideActionHeader: true,
+            layout: [],
+            handler: async (request, response, context) => NewAction.handler(request, response, context),
+            before: async (request, context) => {
+              prepareBlogRequest(request)
+              ensureListingTimestamps(request)
+              ensureBlogSlug(request)
+              ensureListingAuditAdmins(request, context, { isNew: true })
+              return request
             },
-            city_id: { reference: 'cities' },
-            google_map_link: {
-              props: { placeholder: 'https://maps.google.com/?q=...' },
-              components: {
-                list: Components.PlaceGoogleMapLink,
-                show: Components.PlaceGoogleMapLink,
-                edit: Components.PlaceGoogleMapLink,
-              },
+          },
+          edit: {
+            component: Components.BlogEditForm,
+            hideActionHeader: true,
+            layout: [],
+            handler: async (request, response, context) => EditAction.handler(request, response, context),
+            before: async (request, context) => {
+              prepareBlogRequest(request)
+              ensureListingTimestamps(request)
+              ensureListingAuditAdmins(request, context, { isNew: false })
+              return request
             },
-            created_at: { isVisible: false },
-            updated_at: { isVisible: false },
           },
         },
-      },
-
-      {
-        resource: db.table('shows'),
-        options: {
-          navigation: null,
-          properties: {
-            listing_id: { reference: 'listings' },
-            place_id: { reference: 'places' },
-            created_at: { isVisible: false },
-            updated_at: { isVisible: false },
+      }),
+      res('listing_gallery_images', {
+        navigation: { name: 'Content', icon: 'Image' },
+        sort: { sortBy: 'created_at', direction: 'desc' },
+        properties: {
+          listing_id: { reference: 'listings' },
+          image_path: {
+            components: {
+              list: Components.ImageThumb,
+              show: Components.ImageThumb,
+              edit: Components.GalleryImageUpload,
+            },
           },
-          actions: { list: { isVisible: false }, show: { isVisible: false }, new: { isVisible: false }, edit: { isVisible: false }, delete: { isVisible: false } },
+          created_at: { isVisible: false },
         },
-      },
-      {
-        resource: db.table('show_times'),
-        options: {
-          navigation: null,
-          properties: {
-            show_id: { reference: 'shows' },
-            created_at: { isVisible: false },
+        actions: {
+          list: { component: Components.ListingGalleryGrid, perPage: 20 },
+        },
+      }),
+      res('listing_related', {
+        navigation: { name: 'Content', icon: 'Link' },
+        properties: { created_at: { isVisible: false } },
+      }),
+      res('countries', {
+        navigation: { name: 'Locations', icon: 'Map' },
+        listProperties: ['flag_image_path', 'name', 'code'],
+        properties: {
+          flag_image_path: {
+            components: {
+              list: Components.FlagImageUpload,
+              show: Components.FlagImageUpload,
+              edit: Components.FlagImageUpload,
+            },
           },
-          actions: { list: { isVisible: false }, show: { isVisible: false }, new: { isVisible: false }, edit: { isVisible: false }, delete: { isVisible: false } },
+          created_at: { isVisible: false },
+          updated_at: { isVisible: false },
         },
-      },
-
-      { resource: db.table('comments'), options: { navigation: { name: 'Moderation', icon: 'Chat' }, properties: { created_at: { isVisible: false }, updated_at: { isVisible: false } } } },
-      { resource: db.table('ratings'), options: { navigation: { name: 'Moderation', icon: 'Star' }, properties: { created_at: { isVisible: false }, updated_at: { isVisible: false } } } },
-
-      { resource: db.table('login_events'), options: { navigation: { name: 'Analytics', icon: 'Activity' }, properties: { created_at: { isVisible: false } } } },
-      { resource: db.table('page_visits'), options: { navigation: { name: 'Analytics', icon: 'Activity' }, properties: { created_at: { isVisible: false } } } },
-      { resource: db.table('booking_clicks'), options: { navigation: { name: 'Analytics', icon: 'Activity' }, properties: { created_at: { isVisible: false } } } },
-      { resource: db.table('refresh_tokens'), options: { navigation: { name: 'Auth', icon: 'Locked' }, properties: { created_at: { isVisible: false } } } },
+      }),
+      res('states', {
+        navigation: { name: 'Locations', icon: 'Map' },
+        properties: { created_at: { isVisible: false }, updated_at: { isVisible: false } },
+      }),
+      res('cities', {
+        navigation: { name: 'Locations', icon: 'Map' },
+        properties: { created_at: { isVisible: false }, updated_at: { isVisible: false } },
+      }),
+      res('places', {
+        navigation: { name: 'Locations', icon: 'Pin' },
+        listProperties: ['name', 'city_id', 'address', 'google_map_link'],
+        properties: {
+          name: {
+            components: {
+              edit: Components.PlaceNameWithDuplicateHint,
+            },
+          },
+          city_id: { reference: 'cities' },
+          google_map_link: {
+            props: { placeholder: 'https://maps.google.com/?q=...' },
+            components: {
+              list: Components.PlaceGoogleMapLink,
+              show: Components.PlaceGoogleMapLink,
+              edit: Components.PlaceGoogleMapLink,
+            },
+          },
+          created_at: { isVisible: false },
+          updated_at: { isVisible: false },
+        },
+      }),
+      res('shows', {
+        navigation: null,
+        properties: {
+          listing_id: { reference: 'listings' },
+          place_id: { reference: 'places' },
+          created_at: { isVisible: false },
+          updated_at: { isVisible: false },
+        },
+        actions: {
+          list: { isVisible: false },
+          show: { isVisible: false },
+          new: { isVisible: false },
+          edit: { isVisible: false },
+          delete: { isVisible: false },
+        },
+      }),
+      res('show_times', {
+        navigation: null,
+        properties: {
+          show_id: { reference: 'shows' },
+          created_at: { isVisible: false },
+        },
+        actions: {
+          list: { isVisible: false },
+          show: { isVisible: false },
+          new: { isVisible: false },
+          edit: { isVisible: false },
+          delete: { isVisible: false },
+        },
+      }),
+      res('comments', {
+        navigation: { name: 'Moderation', icon: 'Chat' },
+        properties: { created_at: { isVisible: false }, updated_at: { isVisible: false } },
+      }),
+      res('ratings', {
+        navigation: { name: 'Moderation', icon: 'Star' },
+        properties: { created_at: { isVisible: false }, updated_at: { isVisible: false } },
+      }),
+      res('login_events', {
+        navigation: { name: 'Analytics', icon: 'Activity' },
+        properties: { created_at: { isVisible: false } },
+      }),
+      res('page_visits', {
+        navigation: { name: 'Analytics', icon: 'Activity' },
+        properties: { created_at: { isVisible: false } },
+      }),
+      res('booking_clicks', {
+        navigation: { name: 'Analytics', icon: 'Activity' },
+        properties: { created_at: { isVisible: false } },
+      }),
+      res('refresh_tokens', {
+        navigation: { name: 'Auth', icon: 'Locked' },
+        properties: { created_at: { isVisible: false } },
+      }),
     ],
   })
 

@@ -1,43 +1,347 @@
-/* Sidebar: bigger font + icons */
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap');
+
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined', sans-serif;
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────── */
 [data-css="sidebar"] .adminjs_Navigation,
 [data-css="sidebar"] .adminjs_Navigation * {
   font-size: 14px;
 }
 
-/* Section label */
 [data-css="sidebar"] .adminjs_Navigation__Label,
 [data-css="sidebar"] [class*="Navigation__Label"] {
-  font-size: 12px;
-  letter-spacing: 0.02em;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #71717a;
 }
 
-/* Menu links */
 [data-css="sidebar"] a,
 [data-css="sidebar"] button {
   font-size: 14px;
 }
 
-/* Icons inside navigation */
-[data-css="sidebar"] svg {
-  width: 20px;
-  height: 20px;
-}
-
-/* Slightly larger row height for readability */
 [data-css="sidebar"] [class*="NavigationElement"] {
   padding-top: 10px;
   padding-bottom: 10px;
 }
 
-/* Global: cap date/time picker width */
+/* Replace default AdminJS SVG icons with Material Symbols */
+[data-css="sidebar"] nav a[href] svg,
+[data-css="sidebar"] nav button svg {
+  display: none !important;
+}
+
+[data-css="sidebar"] nav a[href],
+[data-css="sidebar"] nav button {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 0;
+}
+
+[data-css="sidebar"] nav a[href]::before,
+[data-css="sidebar"] nav button::before {
+  font-family: 'Material Symbols Outlined';
+  font-size: 20px;
+  line-height: 1;
+  width: 22px;
+  margin-right: 10px;
+  flex-shrink: 0;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  color: #4268f6;
+}
+
+[data-css="sidebar"] nav a[href][aria-current="page"]::before,
+[data-css="sidebar"] nav a[href].active::before {
+  font-variation-settings: 'FILL' 1, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+}
+
+[data-css="sidebar"] nav a[href="/admin"]::before,
+[data-css="sidebar"] nav a[href="/admin/"]::before { content: 'dashboard'; }
+[data-css="sidebar"] nav a[href*="/pages/sliderBanner"]::before { content: 'slideshow'; }
+[data-css="sidebar"] nav a[href*="/pages/homeListings"]::before { content: 'view_list'; }
+[data-css="sidebar"] nav a[href*="/pages/footer"]::before { content: 'dock_to_bottom'; }
+[data-css="sidebar"] nav a[href*="/resources/listings"]::before { content: 'theaters'; }
+[data-css="sidebar"] nav a[href*="/resources/types"]::before { content: 'category'; }
+[data-css="sidebar"] nav a[href*="/resources/promotions"]::before { content: 'campaign'; }
+[data-css="sidebar"] nav a[href*="/resources/blogs"]::before { content: 'article'; }
+[data-css="sidebar"] nav a[href*="/resources/listing_gallery_images"]::before { content: 'photo_library'; }
+[data-css="sidebar"] nav a[href*="/resources/listing_related"]::before { content: 'link'; }
+[data-css="sidebar"] nav a[href*="/resources/countries"]::before { content: 'flag'; }
+[data-css="sidebar"] nav a[href*="/resources/states"]::before { content: 'map'; }
+[data-css="sidebar"] nav a[href*="/resources/cities"]::before { content: 'location_city'; }
+[data-css="sidebar"] nav a[href*="/resources/places"]::before { content: 'place'; }
+[data-css="sidebar"] nav a[href*="/resources/casts"]::before { content: 'groups'; }
+[data-css="sidebar"] nav a[href*="/resources/users"]::before { content: 'person'; }
+[data-css="sidebar"] nav a[href*="/resources/admins"]::before { content: 'admin_panel_settings'; }
+[data-css="sidebar"] nav a[href*="/resources/admin_roles"]::before { content: 'shield_person'; }
+[data-css="sidebar"] nav a[href*="/resources/admin_role_permissions"]::before { content: 'vpn_key'; }
+[data-css="sidebar"] nav a[href*="/resources/comments"]::before { content: 'chat'; }
+[data-css="sidebar"] nav a[href*="/resources/ratings"]::before { content: 'star'; }
+[data-css="sidebar"] nav a[href*="/resources/login_events"]::before { content: 'login'; }
+[data-css="sidebar"] nav a[href*="/resources/page_visits"]::before { content: 'visibility'; }
+[data-css="sidebar"] nav a[href*="/resources/booking_clicks"]::before { content: 'ads_click'; }
+[data-css="sidebar"] nav a[href*="/resources/refresh_tokens"]::before { content: 'key'; }
+
+/* ── Modern date / time pickers ──────────────────────────── */
+.admin-modern-picker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 320px;
+  min-height: 42px;
+  border: 1px solid #d4d4d8;
+  border-radius: 10px;
+  background: #fff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.admin-modern-picker:focus-within {
+  border-color: #4268f6;
+  box-shadow: 0 0 0 3px rgba(66, 104, 246, 0.14);
+}
+
+.admin-modern-picker__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 12px;
+  color: #4268f6;
+  pointer-events: none;
+}
+
+.admin-modern-picker__input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 10px 8px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: #18181b;
+  cursor: pointer;
+}
+
+.admin-modern-picker__input::placeholder {
+  color: #a1a1aa;
+}
+
+.admin-modern-picker__input:disabled {
+  cursor: not-allowed;
+  color: #a1a1aa;
+}
+
+.admin-modern-picker__clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 6px;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #71717a;
+  cursor: pointer;
+}
+
+.admin-modern-picker__clear:hover {
+  background: #f4f4f5;
+  color: #18181b;
+}
+
+.admin-modern-calendar-popper {
+  z-index: 9999 !important;
+}
+
+.admin-modern-calendar {
+  font-family: inherit;
+  border: 1px solid #e4e4e7 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.14) !important;
+  overflow: hidden;
+}
+
+.admin-modern-calendar .react-datepicker__header {
+  background: #f8fafc !important;
+  border-bottom: 1px solid #e4e4e7 !important;
+  padding-top: 12px !important;
+}
+
+.admin-modern-calendar .react-datepicker__current-month,
+.admin-modern-calendar .react-datepicker-time__header {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: #18181b !important;
+}
+
+.admin-modern-calendar .react-datepicker__day-name {
+  color: #71717a !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+
+.admin-modern-calendar .react-datepicker__day {
+  border-radius: 8px !important;
+  line-height: 2rem !important;
+  width: 2rem !important;
+  margin: 0.12rem !important;
+  color: #18181b !important;
+}
+
+.admin-modern-calendar .react-datepicker__day:hover {
+  background: #eef2ff !important;
+}
+
+.admin-modern-calendar .react-datepicker__day--selected,
+.admin-modern-calendar .react-datepicker__day--keyboard-selected {
+  background: #4268f6 !important;
+  color: #fff !important;
+}
+
+.admin-modern-calendar .react-datepicker__day--disabled {
+  color: #d4d4d8 !important;
+}
+
+.admin-modern-calendar .react-datepicker__navigation {
+  top: 12px !important;
+}
+
+.admin-modern-calendar .react-datepicker__time-container {
+  border-left: 1px solid #e4e4e7 !important;
+  width: 96px !important;
+}
+
+.admin-modern-calendar .react-datepicker__time-list-item {
+  font-size: 13px !important;
+  padding: 8px 10px !important;
+}
+
+.admin-modern-calendar .react-datepicker__time-list-item--selected {
+  background: #4268f6 !important;
+  color: #fff !important;
+  font-weight: 600 !important;
+}
+
+.admin-modern-calendar--time .react-datepicker__time-container {
+  width: 100% !important;
+  border-left: 0 !important;
+}
+
+.admin-modern-calendar--time .react-datepicker__time-box {
+  width: 100% !important;
+}
+
+/* Legacy AdminJS pickers — align with modern style when still used */
 .adminjs_DatePicker,
 .adminjs_DatePicker .react-datepicker-wrapper,
 .adminjs_DatePicker .react-datepicker-wrapper input {
-  max-width: 300px;
+  max-width: 320px;
 }
 
-/* Also cap native time inputs used in custom forms */
-input[type="time"] {
-  max-width: 300px;
+input[type="time"],
+input[type="date"] {
+  max-width: 320px;
+  min-height: 42px;
+  border-radius: 10px;
+  border: 1px solid #d4d4d8;
+  padding: 8px 12px;
+  font-size: 14px;
 }
 
+/* ── Sticky top + bottom save bars ───────────────────────── */
+.admin-form-save-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-form-save-bar--top {
+  margin-top: 0;
+}
+
+.admin-form-save-bar--bottom {
+  border-top: 1px solid #e4e4e7;
+  padding-top: 16px;
+}
+
+.admin-form-save-bar--sticky {
+  position: sticky;
+  top: 0;
+  z-index: 120;
+  margin-left: -4px;
+  margin-right: -4px;
+  padding-left: 4px;
+  padding-right: 4px;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid #e4e4e7;
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.06);
+}
+
+[data-css="action-header"].admin-form-save-bar--sticky,
+[data-css="action-bar"].admin-form-save-bar--sticky {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+}
+
+.adminjs-default-form-save-bottom {
+  margin-top: 28px;
+}
+
+/* Quill rich text — blog form and shared editor */
+[data-blog-edit-form] .admin-rich-text-editor,
+.admin-rich-text-editor {
+  width: 100%;
+}
+
+[data-blog-edit-form] .admin-rich-text-editor .ql-toolbar.ql-snow,
+.admin-rich-text-editor .ql-toolbar.ql-snow {
+  border: 1px solid #d4d4d8;
+  border-radius: 10px 10px 0 0;
+  background: #fafafa;
+  font-family: inherit;
+}
+
+[data-blog-edit-form] .admin-rich-text-editor .ql-container.ql-snow,
+.admin-rich-text-editor .ql-container.ql-snow {
+  border: 1px solid #d4d4d8;
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+[data-blog-edit-form] .admin-rich-text-editor .ql-editor,
+.admin-rich-text-editor .ql-editor {
+  min-height: 240px;
+}
+
+/* Default AdminJS record action header — sticky even before JS enhancement */
+[data-css="action-header"],
+[data-css="action-bar"] {
+  position: sticky;
+  top: 0;
+  z-index: 110;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid #e4e4e7;
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.06);
+}

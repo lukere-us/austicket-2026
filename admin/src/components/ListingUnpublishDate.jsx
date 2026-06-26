@@ -1,11 +1,10 @@
 import React from 'react'
-import { DatePicker, Label } from '@adminjs/design-system'
+import { Label } from '@adminjs/design-system'
 import {
   listingDatePickerBoundary,
-  listingDatePickerIso,
-  listingDatetimeFromPicker,
   normalizeListingDatetime,
 } from './listingDateUtils.js'
+import ModernDatePicker from './ModernDatePicker.jsx'
 
 export default function ListingUnpublishDate(props) {
   const { property, record, onChange } = props
@@ -17,13 +16,11 @@ export default function ListingUnpublishDate(props) {
   return (
     <div style={{ maxWidth: '100%' }}>
       <Label>{property?.label || 'Unpublish at'}</Label>
-      <DatePicker
-        propertyType="date"
-        value={listingDatePickerIso(value)}
+      <ModernDatePicker
+        value={value}
         minDate={publish || undefined}
-        onChange={(iso) => {
-          onChange(path, listingDatetimeFromPicker(iso))
-        }}
+        placeholder="When to unpublish"
+        onChange={(next) => onChange(path, next)}
       />
     </div>
   )
