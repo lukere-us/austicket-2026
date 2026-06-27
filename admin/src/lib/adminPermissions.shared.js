@@ -7,6 +7,8 @@ export const ADMIN_PERMISSION_GROUPS = [
       { key: 'pages.sliderBanner', label: 'Slider & banner settings' },
       { key: 'pages.homeListings', label: 'Homepage listings settings' },
       { key: 'pages.footer', label: 'Footer settings' },
+      { key: 'pages.header', label: 'Header settings' },
+      { key: 'pages.partners', label: 'Partners slider settings' },
     ],
   },
   {

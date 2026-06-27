@@ -3,17 +3,18 @@ export const FOOTER_SETTING_KEY = 'footer'
 const DEFAULT_USEFUL_LINKS = [
   { label: 'About us', url: '/about', enabled: true },
   { label: 'Contact us', url: '/contact', enabled: true },
+  { label: 'Blog', url: '/blogs', enabled: true },
   { label: 'Privacy policy', url: '/privacy', enabled: true },
   { label: 'Terms of use', url: '/terms', enabled: true },
 ]
 
 const DEFAULT_SOCIAL_LINKS = [
-  { platform: 'facebook', label: 'Facebook', url: '', enabled: false },
-  { platform: 'instagram', label: 'Instagram', url: '', enabled: false },
-  { platform: 'twitter', label: 'X (Twitter)', url: '', enabled: false },
-  { platform: 'youtube', label: 'YouTube', url: '', enabled: false },
-  { platform: 'tiktok', label: 'TikTok', url: '', enabled: false },
-  { platform: 'linkedin', label: 'LinkedIn', url: '', enabled: false },
+  { platform: 'facebook', label: 'Facebook', url: '', iconUrl: '', enabled: false },
+  { platform: 'instagram', label: 'Instagram', url: '', iconUrl: '', enabled: false },
+  { platform: 'twitter', label: 'X (Twitter)', url: '', iconUrl: '', enabled: false },
+  { platform: 'youtube', label: 'YouTube', url: '', iconUrl: '', enabled: false },
+  { platform: 'tiktok', label: 'TikTok', url: '', iconUrl: '', enabled: false },
+  { platform: 'linkedin', label: 'LinkedIn', url: '', iconUrl: '', enabled: false },
 ]
 
 const DEFAULTS = {
@@ -94,12 +95,20 @@ export const FIELD_GROUPS = [
 ]
 
 function cloneLinks(items, fallback) {
-  if (!Array.isArray(items) || items.length === 0) return fallback.map((item) => ({ ...item }))
-  return items.map((item) => ({
+  const base = !Array.isArray(items) || items.length === 0 ? fallback.map((item) => ({ ...item })) : items.map((item) => ({
     label: String(item?.label ?? '').trim(),
     url: String(item?.url ?? '').trim(),
     enabled: item?.enabled !== false && item?.enabled !== 0 && item?.enabled !== '0',
   }))
+
+  const blogDefault = fallback.find((item) => item.url === '/blogs')
+  if (blogDefault && !base.some((item) => item.url === '/blogs')) {
+    const contactIdx = base.findIndex((item) => item.url === '/contact')
+    if (contactIdx >= 0) base.splice(contactIdx + 1, 0, { ...blogDefault })
+    else base.push({ ...blogDefault })
+  }
+
+  return base
 }
 
 function cloneCityLinks(items) {
@@ -125,6 +134,7 @@ function cloneSocialLinks(items, fallback) {
       ...base,
       label: String(raw?.label ?? base.label).trim() || base.label,
       url: String(raw?.url ?? '').trim(),
+      iconUrl: String(raw?.iconUrl ?? base.iconUrl ?? '').trim(),
       enabled: raw?.enabled === true || raw?.enabled === 1 || raw?.enabled === '1',
     })
   }

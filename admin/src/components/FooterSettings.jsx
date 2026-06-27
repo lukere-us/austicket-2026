@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNotice } from 'adminjs'
-import { Box, Button, H2, H4, Input, Loader, Text } from '@adminjs/design-system'
+import { Box, Button, H2, H4, Loader, Text } from '@adminjs/design-system'
 import FormSaveChrome from './FormSaveChrome.jsx'
 import { SettingsFieldRow } from './SettingsFieldRow.jsx'
 import { readFooterFormValues } from '../lib/readSettingsForm.js'
@@ -88,6 +88,29 @@ function LinkRowsEditor({ title, rows, onChange, addLabel = 'Add link' }) {
   )
 }
 
+function SocialIconPreview({ platform, iconUrl, label }) {
+  const src = iconUrl?.trim()
+  if (src) {
+    const href = /^https?:\/\//i.test(src) ? src : src
+    return (
+      <img
+        src={href}
+        alt=""
+        width={20}
+        height={20}
+        style={{ borderRadius: 4, objectFit: 'contain' }}
+        onError={(e) => {
+          e.currentTarget.style.display = 'none'
+        }}
+      />
+    )
+  }
+
+  return (
+    <span style={{ fontSize: 11, color: '#71717a', textTransform: 'capitalize' }}>{platform || label}</span>
+  )
+}
+
 function SocialRowsEditor({ rows, onChange }) {
   const updateRow = (index, patch) => {
     onChange(rows.map((row, i) => (i === index ? { ...row, ...patch } : row)))
@@ -96,14 +119,33 @@ function SocialRowsEditor({ rows, onChange }) {
   return (
     <Box mb="xxl">
       <H4 mb="md">Social media links</H4>
+      <Text variant="sm" color="grey60" mb="md">
+        Set profile URLs, optional custom icon images, and toggle visibility. Leave icon URL empty to use the
+        default platform icon on the site.
+      </Text>
       {rows.map((row, index) => (
         <Box key={row.platform} mb="md" p="md" borderRadius="lg" style={{ border: '1px solid #e4e4e7' }}>
-          <Box display="grid" style={{ gridTemplateColumns: '140px 1fr auto', gap: 12 }} alignItems="end">
+          <Box display="grid" style={{ gridTemplateColumns: '120px 1fr 1fr auto', gap: 12 }} alignItems="end">
             <Box>
               <Text variant="sm" mb="sm">
                 Platform
               </Text>
-              <Input value={row.label} disabled />
+              <Box display="flex" alignItems="center" gap="sm" minHeight={40}>
+                <SocialIconPreview platform={row.platform} iconUrl={row.iconUrl} label={row.label} />
+                <Text variant="sm" style={{ textTransform: 'capitalize' }}>
+                  {row.platform}
+                </Text>
+              </Box>
+            </Box>
+            <Box>
+              <Text variant="sm" mb="sm">
+                Label
+              </Text>
+              <input
+                style={rowInputStyle}
+                value={row.label}
+                onChange={(e) => updateRow(index, { label: e.target.value })}
+              />
             </Box>
             <Box>
               <Text variant="sm" mb="sm">
@@ -124,6 +166,17 @@ function SocialRowsEditor({ rows, onChange }) {
               />
               Show
             </label>
+          </Box>
+          <Box mt="md">
+            <Text variant="sm" mb="sm">
+              Custom icon URL (optional)
+            </Text>
+            <input
+              style={rowInputStyle}
+              value={row.iconUrl || ''}
+              onChange={(e) => updateRow(index, { iconUrl: e.target.value })}
+              placeholder="https://... or Upload/social/facebook.svg"
+            />
           </Box>
         </Box>
       ))}

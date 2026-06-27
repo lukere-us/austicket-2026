@@ -15,6 +15,7 @@ import { buildAdminJs } from './adminjs.js'
 import { dbPool, getDbConfig } from './db.js'
 import { ensureShowTimesTable } from './lib/ensureShowTimesTable.js'
 import { ensureBlogsSchema } from './lib/ensureBlogsSchema.js'
+import { waitForDatabase } from './lib/waitForDatabase.js'
 import {
   homeHeroSettingFields,
   loadHomeHeroSettings,
@@ -31,6 +32,16 @@ import {
   loadFooterCityOptions,
   saveFooterSettings,
 } from './lib/footerSettings.js'
+import {
+  headerSettingFields,
+  loadHeaderSettings,
+  saveHeaderSettings,
+} from './lib/headerSettings.js'
+import {
+  partnersSettingFields,
+  loadPartnersSettings,
+  savePartnersSettings,
+} from './lib/partnersSettings.js'
 import { parseSettingsBody } from './lib/parseSettingsBody.js'
 import { can, canAny, loadAdminPermissions } from './lib/adminPermissions.js'
 import { attachAdminSessionRefresh, sessionWithAdminRefresh } from './lib/refreshAdminSession.js'
@@ -121,6 +132,7 @@ async function start() {
 
   const app = express()
 
+  await waitForDatabase()
   await ensureShowTimesTable(dbPool())
   await ensureBlogsSchema(dbPool())
 
@@ -328,6 +340,115 @@ async function start() {
             fileName: name,
             publicUrl: `${adminJs.options.rootPath}/uploads-root/${encodeURIComponent(`cast/${name}`)}`,
             storedPath: `Upload/cast/${name}`,
+          },
+        })
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('upload error', e)
+        res.status(500).json({ error: e?.message || String(e) })
+      }
+    }
+  )
+
+  // Upload endpoint for header logos (SVG or image)
+  app.post(
+    `${adminJs.options.rootPath}/api/uploads/header-logo`,
+    sessionMiddleware,
+    requireUploadPermission,
+    formidableMiddleware({
+      multiples: false,
+      maxFileSize: 2 * 1024 * 1024,
+      uploadDir: os.tmpdir(),
+    }),
+    async (req, res) => {
+      try {
+        const file = req.files?.file ?? req.files?.image ?? req.files?.files ?? null
+        const f = Array.isArray(file) ? file[0] : file
+        if (!f) return res.status(400).json({ error: 'No file uploaded' })
+
+        const orig = String(f?.name || 'logo')
+        const extRaw = path.extname(orig).toLowerCase()
+        const type = String(f?.type || '')
+        const isSvg = type === 'image/svg+xml' || extRaw === '.svg'
+        if (!isSvg && !type.startsWith('image/')) {
+          return res.status(400).json({ error: 'Only SVG or image uploads are allowed' })
+        }
+        const size = Number(f?.size || 0)
+        if (size > 2 * 1024 * 1024) {
+          return res.status(400).json({ error: 'File must be <= 2MB' })
+        }
+
+        const logosDir = path.join(UPLOAD_DIR, 'logos')
+        await fs.mkdir(logosDir, { recursive: true })
+
+        const ext = isSvg ? '.svg' : extRaw.replace(/[^.\w]/g, '') || '.png'
+        const name = `logo_${Date.now()}_${Math.random().toString(16).slice(2)}${ext}`
+        const destAbs = path.join(logosDir, name)
+        const tmp = f?.path
+        if (!tmp) return res.status(400).json({ error: 'Invalid upload' })
+        await moveFile(tmp, destAbs)
+
+        res.json({
+          file: {
+            fileName: name,
+            publicUrl: `${adminJs.options.rootPath}/uploads-root/${encodeURIComponent(`logos/${name}`)}`,
+            storedPath: `Upload/logos/${name}`,
+          },
+        })
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('upload error', e)
+        res.status(500).json({ error: e?.message || String(e) })
+      }
+    }
+  )
+
+  // Upload endpoint for partner logos (SVG, PNG, JPEG)
+  app.post(
+    `${adminJs.options.rootPath}/api/uploads/partner-logo`,
+    sessionMiddleware,
+    requireUploadPermission,
+    formidableMiddleware({
+      multiples: false,
+      maxFileSize: 2 * 1024 * 1024,
+      uploadDir: os.tmpdir(),
+    }),
+    async (req, res) => {
+      try {
+        const file = req.files?.file ?? req.files?.image ?? req.files?.files ?? null
+        const f = Array.isArray(file) ? file[0] : file
+        if (!f) return res.status(400).json({ error: 'No file uploaded' })
+
+        const orig = String(f?.name || 'logo')
+        const extRaw = path.extname(orig).toLowerCase()
+        const type = String(f?.type || '')
+        const isSvg = type === 'image/svg+xml' || extRaw === '.svg'
+        const isJpeg =
+          type === 'image/jpeg' || type === 'image/jpg' || extRaw === '.jpg' || extRaw === '.jpeg'
+        const isPng = type === 'image/png' || extRaw === '.png'
+        if (!isSvg && !isJpeg && !isPng) {
+          return res.status(400).json({ error: 'Only SVG, PNG, or JPEG uploads are allowed' })
+        }
+        const size = Number(f?.size || 0)
+        if (size > 2 * 1024 * 1024) {
+          return res.status(400).json({ error: 'File must be <= 2MB' })
+        }
+
+        const partnersDir = path.join(UPLOAD_DIR, 'partners')
+        await fs.mkdir(partnersDir, { recursive: true })
+
+        const ext = isSvg ? '.svg' : isJpeg ? (extRaw === '.jpeg' ? '.jpeg' : '.jpg') : '.png'
+        const name = `partner_${Date.now()}_${Math.random().toString(16).slice(2)}${ext}`
+        const destAbs = path.join(partnersDir, name)
+        const tmp = f?.path
+        if (!tmp) return res.status(400).json({ error: 'Invalid upload' })
+        await moveFile(tmp, destAbs)
+
+        res.json({
+          file: {
+            fileName: name,
+            publicUrl: `${adminJs.options.rootPath}/uploads-root/${encodeURIComponent(`partners/${name}`)}`,
+            storedPath: `Upload/partners/${name}`,
           },
         })
       } catch (e) {
@@ -575,6 +696,58 @@ async function start() {
         fields: footerSettingFields(),
         cities: await loadFooterCityOptions(pool),
         notice: { message: 'Footer settings saved.', type: 'success' },
+      })
+    } catch (e) {
+      res.status(500).json({ error: e?.message || String(e) })
+    }
+  })
+
+  settingsApi.get('/header', requireAnyPermission('pages.header', 'pages.homeListings', 'pages.sliderBanner'), async (_req, res) => {
+    try {
+      const pool = dbPool()
+      jsonNoCache(res, {
+        settings: await loadHeaderSettings(pool),
+        fields: headerSettingFields(),
+      })
+    } catch (e) {
+      res.status(500).json({ error: e?.message || String(e) })
+    }
+  })
+
+  settingsApi.post('/header', requireAnyPermission('pages.header', 'pages.homeListings', 'pages.sliderBanner'), async (req, res) => {
+    try {
+      const pool = dbPool()
+      const settings = await saveHeaderSettings(pool, parseSettingsBody(req))
+      jsonNoCache(res, {
+        settings,
+        fields: headerSettingFields(),
+        notice: { message: 'Header settings saved.', type: 'success' },
+      })
+    } catch (e) {
+      res.status(500).json({ error: e?.message || String(e) })
+    }
+  })
+
+  settingsApi.get('/partners', requireAnyPermission('pages.partners', 'pages.homeListings', 'pages.sliderBanner'), async (_req, res) => {
+    try {
+      const pool = dbPool()
+      jsonNoCache(res, {
+        settings: await loadPartnersSettings(pool),
+        fields: partnersSettingFields(),
+      })
+    } catch (e) {
+      res.status(500).json({ error: e?.message || String(e) })
+    }
+  })
+
+  settingsApi.post('/partners', requireAnyPermission('pages.partners', 'pages.homeListings', 'pages.sliderBanner'), async (req, res) => {
+    try {
+      const pool = dbPool()
+      const settings = await savePartnersSettings(pool, parseSettingsBody(req))
+      jsonNoCache(res, {
+        settings,
+        fields: partnersSettingFields(),
+        notice: { message: 'Partners settings saved.', type: 'success' },
       })
     } catch (e) {
       res.status(500).json({ error: e?.message || String(e) })

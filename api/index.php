@@ -9,6 +9,8 @@ require_once __DIR__ . '/lib/site_settings.php';
 require_once __DIR__ . '/lib/home_hero_settings.php';
 require_once __DIR__ . '/lib/home_listings_settings.php';
 require_once __DIR__ . '/lib/footer_settings.php';
+require_once __DIR__ . '/lib/header_settings.php';
+require_once __DIR__ . '/lib/partners_settings.php';
 require_once __DIR__ . '/lib/blogs.php';
 require_once __DIR__ . '/lib/home_hero_stats.php';
 
@@ -347,17 +349,19 @@ function listing_card_select_sql(bool $withShowTimes = true): string
   ";
 }
 
-function fetch_listing_cards(PDO $pdo, array $extraWhere, array $params, string $orderBy, int $limit): array
+function fetch_listing_cards(PDO $pdo, array $extraWhere, array $params, string $orderBy, int $limit, int $offset = 0): array
 {
   $where = array_merge(listing_visible_where(), $extraWhere);
   $withShowTimes = show_times_table_ready($pdo);
+  $limit = max(1, $limit);
+  $offset = max(0, $offset);
   $sql = "
     SELECT " . listing_card_select_sql($withShowTimes) . "
     FROM listings l
     JOIN types t ON t.id = l.type_id
     WHERE " . implode(' AND ', $where) . "
     ORDER BY $orderBy
-    LIMIT $limit
+    LIMIT $limit OFFSET $offset
   ";
   $stmt = $pdo->prepare($sql);
   $stmt->execute($params);
@@ -370,6 +374,21 @@ function fetch_listing_cards(PDO $pdo, array $extraWhere, array $params, string 
     return $rows;
   }
   return attach_upcoming_show_times($pdo, $rows);
+}
+
+function count_listing_cards(PDO $pdo, array $extraWhere, array $params): int
+{
+  $where = array_merge(listing_visible_where(), $extraWhere);
+  $sql = "
+    SELECT COUNT(DISTINCT l.id) AS cnt
+    FROM listings l
+    JOIN types t ON t.id = l.type_id
+    WHERE " . implode(' AND ', $where) . "
+  ";
+  $stmt = $pdo->prepare($sql);
+  $stmt->execute($params);
+  $row = $stmt->fetch(PDO::FETCH_ASSOC);
+  return max(0, (int)($row['cnt'] ?? 0));
 }
 
 function attach_upcoming_show_times(PDO $pdo, array $items, int $limitPerListing = 4): array
@@ -564,7 +583,30 @@ if ($method === 'GET' && $path === '/listings') {
     $params[':country_name'] = $countryName;
   }
 
-  $items = fetch_listing_cards($pdo, $extra, $params, 'COALESCE(l.publish_at, l.created_at) DESC', 100);
+  $orderBy = 'COALESCE(l.publish_at, l.created_at) DESC';
+  $hasPaging = isset($_GET['page']) || isset($_GET['per_page']);
+  if ($hasPaging) {
+    $page = max(1, (int)($_GET['page'] ?? 1));
+    $perPage = min(48, max(1, (int)($_GET['per_page'] ?? 12)));
+    $total = count_listing_cards($pdo, $extra, $params);
+    $totalPages = max(1, (int)ceil($total / $perPage));
+    if ($page > $totalPages) {
+      $page = $totalPages;
+    }
+    $offset = ($page - 1) * $perPage;
+    $items = fetch_listing_cards($pdo, $extra, $params, $orderBy, $perPage, $offset);
+    json_response([
+      'items' => $items,
+      'pagination' => [
+        'page' => $page,
+        'perPage' => $perPage,
+        'total' => $total,
+        'totalPages' => $totalPages,
+      ],
+    ]);
+  }
+
+  $items = fetch_listing_cards($pdo, $extra, $params, $orderBy, 100);
   json_response(['items' => $items]);
 }
 
@@ -1216,6 +1258,20 @@ if ($method === 'GET' && $path === '/settings/footer') {
   json_response(['settings' => load_footer_settings($pdo)]);
 }
 
+if ($method === 'GET' && $path === '/settings/header') {
+  header('Cache-Control: no-store, no-cache, must-revalidate');
+  header('Pragma: no-cache');
+  $pdo = db();
+  json_response(['settings' => load_header_settings($pdo)]);
+}
+
+if ($method === 'GET' && $path === '/settings/partners') {
+  header('Cache-Control: no-store, no-cache, must-revalidate');
+  header('Pragma: no-cache');
+  $pdo = db();
+  json_response(['settings' => load_partners_settings($pdo)]);
+}
+
 if ($method === 'GET' && $path === '/blogs/home') {
   header('Cache-Control: no-store, no-cache, must-revalidate');
   header('Pragma: no-cache');
@@ -1242,21 +1298,36 @@ if ($method === 'GET' && preg_match('#^/blogs/([^/]+)$#', $path, $m)) {
     json_response(['error' => 'not_found'], 404);
   }
 
-  $country = isset($_GET['country']) ? trim((string)$_GET['country']) : '';
+  $countryName = normalize_country_name($_GET['country'] ?? null);
   $recentBlogs = fetch_published_blogs($pdo, 6, (int)$blog['id']);
   $eventWhere = ['1=1'];
   $eventParams = [];
-  if ($country !== '') {
-    $eventWhere[] = 'co.name = :country';
-    $eventParams[':country'] = $country;
+  if ($countryName !== null) {
+    $eventWhere[] = listing_country_exists_sql(':country_name');
+    $eventParams[':country_name'] = $countryName;
   }
-  $recentEvents = fetch_listing_cards(
+  $recentEventRows = fetch_listing_cards(
     $pdo,
     $eventWhere,
     $eventParams,
     'COALESCE(l.publish_at, l.created_at) DESC, l.id DESC',
     6
   );
+  $recentEvents = array_map(static function (array $row): array {
+    $location = trim((string)($row['event_location'] ?? ''));
+    $cityName = null;
+    if ($location !== '') {
+      $parts = array_map('trim', explode(',', $location));
+      $cityName = $parts[count($parts) - 1] ?? $location;
+    }
+    return [
+      'id' => (int)($row['id'] ?? 0),
+      'title' => (string)($row['title'] ?? ''),
+      'slug' => (string)($row['slug'] ?? ''),
+      'banner_image' => $row['banner_image'] ?? null,
+      'city_name' => $cityName,
+    ];
+  }, $recentEventRows);
 
   json_response([
     'blog' => $blog,

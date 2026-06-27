@@ -4,7 +4,7 @@ import { AdminJS, ComponentLoader } from 'adminjs'
 import NewAction from '../node_modules/adminjs/lib/backend/actions/new/new-action.js'
 import EditAction from '../node_modules/adminjs/lib/backend/actions/edit/edit-action.js'
 import Adapter, { Database, Resource } from '@adminjs/sql'
-import { dbPool } from './db.js'
+import { dbPool, getDbConfig } from './db.js'
 import { normalizeListingDatetime } from './components/listingDateUtils.js'
 import { applyPermissionsToResourceOptions, can, canAny, canAccessPage, isMainAdminRole } from './lib/adminPermissions.js'
 import { ADMIN_PERMISSION_KEYS } from './lib/adminPermissions.shared.js'
@@ -96,6 +96,14 @@ export async function buildAdminJs() {
       'FooterSettings',
       path.join(__dirname, 'components', 'FooterSettings.jsx')
     ),
+    HeaderSettings: componentLoader.add(
+      'HeaderSettings',
+      path.join(__dirname, 'components', 'HeaderSettings.jsx')
+    ),
+    PartnersSettings: componentLoader.add(
+      'PartnersSettings',
+      path.join(__dirname, 'components', 'PartnersSettings.jsx')
+    ),
     BlogCoverUpload: componentLoader.add(
       'BlogCoverUpload',
       path.join(__dirname, 'components', 'BlogCoverUpload.jsx')
@@ -111,11 +119,13 @@ export async function buildAdminJs() {
     ),
   }
 
-  const databaseName = process.env.DB_NAME || 'aus-booking'
+  const cfg = getDbConfig()
+  const databaseName = cfg.database
   const db = await new Adapter('mysql', {
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
+    host: cfg.host,
+    port: cfg.port,
+    user: cfg.user,
+    password: cfg.password,
     database: databaseName,
   }).init()
 
@@ -924,6 +934,8 @@ export async function buildAdminJs() {
             sliderBanner: 'Slider & Banner',
             homeListings: 'Homepage listings',
             footer: 'Footer settings',
+            header: 'Header settings',
+            partners: 'Partners slider',
           },
         },
       },
@@ -975,6 +987,18 @@ export async function buildAdminJs() {
         component: Components.FooterSettings,
         isAccessible: ({ currentAdmin }) =>
           canAny(currentAdmin, ['pages.footer', 'pages.homeListings', 'pages.sliderBanner']),
+      },
+      header: {
+        icon: 'Settings',
+        component: Components.HeaderSettings,
+        isAccessible: ({ currentAdmin }) =>
+          canAny(currentAdmin, ['pages.header', 'pages.homeListings', 'pages.sliderBanner']),
+      },
+      partners: {
+        icon: 'Image',
+        component: Components.PartnersSettings,
+        isAccessible: ({ currentAdmin }) =>
+          canAny(currentAdmin, ['pages.partners', 'pages.homeListings', 'pages.sliderBanner']),
       },
     },
     resources: [

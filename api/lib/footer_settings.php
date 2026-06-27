@@ -9,6 +9,7 @@ function footer_default_useful_links(): array
   return [
     ['label' => 'About us', 'url' => '/about', 'enabled' => true],
     ['label' => 'Contact us', 'url' => '/contact', 'enabled' => true],
+    ['label' => 'Blog', 'url' => '/blogs', 'enabled' => true],
     ['label' => 'Privacy policy', 'url' => '/privacy', 'enabled' => true],
     ['label' => 'Terms of use', 'url' => '/terms', 'enabled' => true],
   ];
@@ -17,12 +18,12 @@ function footer_default_useful_links(): array
 function footer_default_social_links(): array
 {
   return [
-    ['platform' => 'facebook', 'label' => 'Facebook', 'url' => '', 'enabled' => false],
-    ['platform' => 'instagram', 'label' => 'Instagram', 'url' => '', 'enabled' => false],
-    ['platform' => 'twitter', 'label' => 'X (Twitter)', 'url' => '', 'enabled' => false],
-    ['platform' => 'youtube', 'label' => 'YouTube', 'url' => '', 'enabled' => false],
-    ['platform' => 'tiktok', 'label' => 'TikTok', 'url' => '', 'enabled' => false],
-    ['platform' => 'linkedin', 'label' => 'LinkedIn', 'url' => '', 'enabled' => false],
+    ['platform' => 'facebook', 'label' => 'Facebook', 'url' => '', 'iconUrl' => '', 'enabled' => false],
+    ['platform' => 'instagram', 'label' => 'Instagram', 'url' => '', 'iconUrl' => '', 'enabled' => false],
+    ['platform' => 'twitter', 'label' => 'X (Twitter)', 'url' => '', 'iconUrl' => '', 'enabled' => false],
+    ['platform' => 'youtube', 'label' => 'YouTube', 'url' => '', 'iconUrl' => '', 'enabled' => false],
+    ['platform' => 'tiktok', 'label' => 'TikTok', 'url' => '', 'iconUrl' => '', 'enabled' => false],
+    ['platform' => 'linkedin', 'label' => 'LinkedIn', 'url' => '', 'iconUrl' => '', 'enabled' => false],
   ];
 }
 
@@ -61,6 +62,31 @@ function footer_clone_links(array $items, array $fallback): array
     $enabled = !array_key_exists('enabled', $item) || site_settings_bool($item['enabled'], true);
     $out[] = ['label' => $label, 'url' => $url, 'enabled' => $enabled];
   }
+
+  $hasBlog = false;
+  foreach ($out as $link) {
+    if (($link['url'] ?? '') === '/blogs') {
+      $hasBlog = true;
+      break;
+    }
+  }
+  if (!$hasBlog) {
+    foreach ($fallback as $link) {
+      if (($link['url'] ?? '') === '/blogs') {
+        $inserted = false;
+        foreach ($out as $i => $existing) {
+          if (($existing['url'] ?? '') === '/contact') {
+            array_splice($out, $i + 1, 0, [$link]);
+            $inserted = true;
+            break;
+          }
+        }
+        if (!$inserted) $out[] = $link;
+        break;
+      }
+    }
+  }
+
   return $out;
 }
 
@@ -93,6 +119,7 @@ function footer_clone_social_links(array $items, array $fallback): array
       'platform' => $platform,
       'label' => trim((string)($item['label'] ?? $base['label'])) ?: $base['label'],
       'url' => trim((string)($item['url'] ?? '')),
+      'iconUrl' => trim((string)($item['iconUrl'] ?? $base['iconUrl'] ?? '')),
       'enabled' => site_settings_bool($item['enabled'] ?? false, false),
     ];
   }

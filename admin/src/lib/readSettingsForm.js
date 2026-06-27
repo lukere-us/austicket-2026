@@ -1,6 +1,8 @@
 import { mergeHomeHeroSettings } from './homeHeroSettings.shared.js'
 import { mergeHomeListingsSettings } from './homeListingsSettings.shared.js'
 import { mergeFooterSettings } from './footerSettings.shared.js'
+import { mergeHeaderSettings } from './headerSettings.shared.js'
+import { mergePartnersSettings } from './partnersSettings.shared.js'
 
 function readFieldValue(field, el) {
   if (!el) return undefined
@@ -51,4 +53,12 @@ export function readHomeListingsFormValues(formEl, fieldGroups) {
 
 export function readFooterFormValues(formEl, fieldGroups) {
   return readSettingsFormValues(formEl, fieldGroups, mergeFooterSettings)
+}
+
+export function readHeaderFormValues(formEl, fieldGroups) {
+  return readSettingsFormValues(formEl, fieldGroups, mergeHeaderSettings)
+}
+
+export function readPartnersFormValues(formEl, fieldGroups) {
+  return readSettingsFormValues(formEl, fieldGroups, mergePartnersSettings)
 }
