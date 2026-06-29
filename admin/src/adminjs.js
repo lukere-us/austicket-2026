@@ -119,6 +119,7 @@ export async function buildAdminJs() {
       'RolePermissionsForm',
       path.join(__dirname, 'components', 'RolePermissionsForm.jsx')
     ),
+    AdminHelp: componentLoader.add('AdminHelp', path.join(__dirname, 'components', 'AdminHelp.jsx')),
   }
 
   const cfg = getDbConfig()
@@ -949,6 +950,7 @@ export async function buildAdminJs() {
             footer: 'Footer settings',
             header: 'Header settings',
             partners: 'Partners slider',
+            help: 'Help',
           },
         },
       },
@@ -1012,6 +1014,11 @@ export async function buildAdminJs() {
         component: Components.PartnersSettings,
         isAccessible: ({ currentAdmin }) =>
           canAny(currentAdmin, ['pages.partners', 'pages.homeListings', 'pages.sliderBanner']),
+      },
+      help: {
+        icon: 'Help',
+        component: Components.AdminHelp,
+        isAccessible: ({ currentAdmin }) => Boolean(currentAdmin),
       },
     },
     resources: [

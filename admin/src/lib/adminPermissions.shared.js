@@ -9,6 +9,7 @@ export const ADMIN_PERMISSION_GROUPS = [
       { key: 'pages.footer', label: 'Footer settings' },
       { key: 'pages.header', label: 'Header settings' },
       { key: 'pages.partners', label: 'Partners slider settings' },
+      { key: 'pages.help', label: 'Admin help guide' },
     ],
   },
   {
