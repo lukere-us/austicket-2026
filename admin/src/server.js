@@ -15,6 +15,7 @@ import { buildAdminJs } from './adminjs.js'
 import { dbPool, getDbConfig } from './db.js'
 import { ensureShowTimesTable } from './lib/ensureShowTimesTable.js'
 import { ensureBlogsSchema } from './lib/ensureBlogsSchema.js'
+import { ensurePageVisitsVisitedAt } from './lib/ensurePageVisitsVisitedAt.js'
 import { waitForDatabase } from './lib/waitForDatabase.js'
 import {
   homeHeroSettingFields,
@@ -135,6 +136,7 @@ async function start() {
   await waitForDatabase()
   await ensureShowTimesTable(dbPool())
   await ensureBlogsSchema(dbPool())
+  await ensurePageVisitsVisitedAt(dbPool())
 
   app.use((req, res, next) => {
     const startAt = Date.now()

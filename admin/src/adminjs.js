@@ -6,6 +6,7 @@ import EditAction from '../node_modules/adminjs/lib/backend/actions/edit/edit-ac
 import Adapter, { Database, Resource } from '@adminjs/sql'
 import { dbPool, getDbConfig } from './db.js'
 import { normalizeListingDatetime } from './components/listingDateUtils.js'
+import { fetchDailyAnalyticsSeries, fetchDashboardAnalytics } from './lib/dashboardAnalytics.js'
 import { applyPermissionsToResourceOptions, can, canAny, canAccessPage, isMainAdminRole } from './lib/adminPermissions.js'
 import { loadHeaderSettings } from './lib/headerSettings.js'
 import { resolveAdminBrandLogoFromHeader } from './lib/adminBrandLogo.js'
@@ -192,6 +193,19 @@ export async function buildAdminJs() {
     return {
       resource: db.table(tableName),
       options: applyPermissionsToResourceOptions(options, tableName, extraActions),
+    }
+  }
+
+  function analyticsDailyChartAction(tableName) {
+    return {
+      actionType: 'resource',
+      isVisible: false,
+      isAccessible: ({ currentAdmin }) => can(currentAdmin, `${tableName}.list`),
+      handler: async (request) => {
+        const rawDays = request?.query?.days ?? request?.params?.days
+        const days = Number(rawDays) || 30
+        return fetchDailyAnalyticsSeries(dbPool(), tableName, days)
+      },
     }
   }
 
@@ -977,11 +991,13 @@ export async function buildAdminJs() {
             LIMIT 8
           `
         )
+        const analytics = await fetchDashboardAnalytics(pool, 30)
         return {
           listingCount: Number(l?.cnt || 0),
           userCount: Number(u?.cnt || 0),
           commentCount: Number(c?.cnt || 0),
           recentListings: Array.isArray(recent) ? recent : [],
+          ...analytics,
         }
       },
     },
@@ -1558,11 +1574,27 @@ export async function buildAdminJs() {
       }),
       res('page_visits', {
         navigation: { name: 'Analytics', icon: 'Activity' },
-        properties: { created_at: { isVisible: false } },
+        sort: { sortBy: 'visited_at', direction: 'desc' },
+        listProperties: ['visited_at', 'path', 'listing_id', 'user_id', 'referrer', 'ip_address'],
+        properties: {
+          visited_at: {
+            isTitle: false,
+            props: { disabled: true },
+          },
+          listing_id: { reference: 'listings' },
+          user_id: { reference: 'users' },
+          created_at: { isVisible: false },
+        },
+        actions: {
+          dailyChart: analyticsDailyChartAction('page_visits'),
+        },
       }),
       res('booking_clicks', {
         navigation: { name: 'Analytics', icon: 'Activity' },
         properties: { created_at: { isVisible: false } },
+        actions: {
+          dailyChart: analyticsDailyChartAction('booking_clicks'),
+        },
       }),
       res('refresh_tokens', {
         navigation: { name: 'Auth', icon: 'Locked' },

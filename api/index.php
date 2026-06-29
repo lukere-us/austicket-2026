@@ -1053,7 +1053,7 @@ if ($method === 'GET' && $path === '/me/watch-history') {
   $stmt = $pdo->prepare("
     SELECT
       pv.listing_id,
-      MAX(pv.created_at) AS visited_at,
+      MAX(COALESCE(pv.visited_at, pv.created_at)) AS visited_at,
       l.title,
       l.slug,
       l.banner_image,
@@ -1175,18 +1175,27 @@ if ($method === 'POST' && $path === '/analytics/page-visit') {
   }
 
   $pdo = db();
-  $stmt = $pdo->prepare("
-    INSERT INTO page_visits (user_id, listing_id, path, referrer, ip_address, user_agent)
-    VALUES (:u, :l, :p, :r, :ip, :ua)
-  ");
-  $stmt->execute([
+  $params = [
     ':u' => $uid,
     ':l' => $listingId,
     ':p' => $pathStr,
     ':r' => ($ref === '' ? null : $ref),
     ':ip' => read_client_ip(),
     ':ua' => read_user_agent(),
-  ]);
+  ];
+  try {
+    $stmt = $pdo->prepare("
+      INSERT INTO page_visits (user_id, listing_id, path, referrer, ip_address, user_agent, visited_at)
+      VALUES (:u, :l, :p, :r, :ip, :ua, NOW())
+    ");
+    $stmt->execute($params);
+  } catch (PDOException $e) {
+    $stmt = $pdo->prepare("
+      INSERT INTO page_visits (user_id, listing_id, path, referrer, ip_address, user_agent)
+      VALUES (:u, :l, :p, :r, :ip, :ua)
+    ");
+    $stmt->execute($params);
+  }
   json_response(['ok' => true], 201);
 }
 

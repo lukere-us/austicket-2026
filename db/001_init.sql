@@ -333,10 +333,12 @@ CREATE TABLE IF NOT EXISTS page_visits (
   referrer VARCHAR(255) NULL,
   ip_address VARCHAR(45) NULL,
   user_agent VARCHAR(255) NULL,
+  visited_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_page_visits_user (user_id),
   KEY idx_page_visits_listing (listing_id),
+  KEY idx_page_visits_visited (visited_at),
   KEY idx_page_visits_created (created_at),
   CONSTRAINT fk_page_visits_user
     FOREIGN KEY (user_id) REFERENCES users(id)

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { ApiClient } from 'adminjs'
 import { Badge, Box, Button, H2, Text } from '@adminjs/design-system'
+import { DashboardDailyChart } from './DashboardDailyChart.jsx'
 
 function Tile({ title, value, accent = '#2563eb' }) {
   return (
@@ -48,6 +49,11 @@ export default function DashboardTiles() {
     userCount: 0,
     commentCount: 0,
     recentListings: [],
+    analyticsDays: 30,
+    pageVisitsByDate: [],
+    pageVisitsTotal: 0,
+    bookingClicksByDate: [],
+    bookingClicksTotal: 0,
   })
   const [loading, setLoading] = useState(true)
 
@@ -58,11 +64,17 @@ export default function DashboardTiles() {
       try {
         const res = await api.getDashboard()
         if (!alive) return
+        const payload = res?.data || {}
         setData({
-          listingCount: Number(res?.data?.listingCount || 0),
-          userCount: Number(res?.data?.userCount || 0),
-          commentCount: Number(res?.data?.commentCount || 0),
-          recentListings: Array.isArray(res?.data?.recentListings) ? res.data.recentListings : [],
+          listingCount: Number(payload.listingCount || 0),
+          userCount: Number(payload.userCount || 0),
+          commentCount: Number(payload.commentCount || 0),
+          recentListings: Array.isArray(payload.recentListings) ? payload.recentListings : [],
+          analyticsDays: Number(payload.analyticsDays || 30),
+          pageVisitsByDate: Array.isArray(payload.pageVisitsByDate) ? payload.pageVisitsByDate : [],
+          pageVisitsTotal: Number(payload.pageVisitsTotal || 0),
+          bookingClicksByDate: Array.isArray(payload.bookingClicksByDate) ? payload.bookingClicksByDate : [],
+          bookingClicksTotal: Number(payload.bookingClicksTotal || 0),
         })
       } finally {
         if (alive) setLoading(false)
@@ -81,15 +93,39 @@ export default function DashboardTiles() {
         {loading ? 'Loading…' : 'Overview'}
       </Text>
 
-      <Box
-        mt="xl"
-        display="grid"
-        gridTemplateColumns="repeat(auto-fit, minmax(220px, 1fr))"
-        gridGap="16px"
-      >
-        <Tile title="Listing count" value={data.listingCount} accent="#2563eb" />
-        <Tile title="User count" value={data.userCount} accent="#06b6d4" />
-        <Tile title="Comments count" value={data.commentCount} accent="#f97316" />
+      <Box className="dashboard-overview" mt="xl">
+        <Box className="dashboard-overview__tiles">
+          <Tile title="Listing count" value={data.listingCount} accent="#2563eb" />
+          <Tile title="User count" value={data.userCount} accent="#06b6d4" />
+          <Tile title="Comments count" value={data.commentCount} accent="#f97316" />
+        </Box>
+
+        <Box className="dashboard-overview__charts">
+          <DashboardDailyChart
+            title="Page visits by date"
+            subtitle={
+              loading
+                ? undefined
+                : `Analytics → Page visits · last ${data.analyticsDays} days · ${data.pageVisitsTotal} total`
+            }
+            accent="#2563eb"
+            series={data.pageVisitsByDate}
+            loading={loading}
+            viewHref="/admin/resources/page_visits"
+          />
+          <DashboardDailyChart
+            title="Booking clicks by date"
+            subtitle={
+              loading
+                ? undefined
+                : `Analytics → Booking clicks · last ${data.analyticsDays} days · ${data.bookingClicksTotal} total`
+            }
+            accent="#f97316"
+            series={data.bookingClicksByDate}
+            loading={loading}
+            viewHref="/admin/resources/booking_clicks"
+          />
+        </Box>
       </Box>
 
       <Box
@@ -112,7 +148,6 @@ export default function DashboardTiles() {
             </Box>
           ) : (
             <Box>
-              {/* header */}
               <Box
                 px="xl"
                 py="lg"
@@ -202,4 +237,3 @@ export default function DashboardTiles() {
     </Box>
   )
 }
-
