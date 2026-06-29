@@ -15,6 +15,8 @@ function header_default_settings(): array
 {
   return [
     'siteName' => 'AUS Ticket Lanka',
+    'siteNameAu' => '',
+    'siteNameNz' => '',
     'taglineTemplate' => "What's on across {location}",
     'homeUrl' => '/',
     'logoAuUrl' => '',
@@ -52,6 +54,8 @@ function header_merge_settings(array $input): array
 
   $rules = [
     'siteName' => 'text',
+    'siteNameAu' => 'optional_text',
+    'siteNameNz' => 'optional_text',
     'taglineTemplate' => 'text',
     'homeUrl' => 'text',
     'logoAuUrl' => 'text',
@@ -75,13 +79,16 @@ function header_merge_settings(array $input): array
       $out[$key] = site_settings_bool($raw, $fallback);
       continue;
     }
+    if ($rule === 'optional_text') {
+      $out[$key] = trim((string)$raw);
+      continue;
+    }
     $s = trim((string)$raw);
     $out[$key] = $s !== '' ? $s : $fallback;
   }
 
   if (array_key_exists('navLinks', $input) && is_array($input['navLinks'])) {
-    $links = header_clone_nav_links($input['navLinks']);
-    $out['navLinks'] = count($links) > 0 ? $links : header_default_nav_links();
+    $out['navLinks'] = header_clone_nav_links($input['navLinks']);
   }
 
   if (empty($out['logoAuUrl']) && empty($out['logoNzUrl']) && !empty($input['logoImageUrl'])) {

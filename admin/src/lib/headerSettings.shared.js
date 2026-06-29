@@ -6,6 +6,8 @@ const DEFAULT_NAV_LINKS = [
 
 const DEFAULTS = {
   siteName: 'AUS Ticket Lanka',
+  siteNameAu: '',
+  siteNameNz: '',
   taglineTemplate: "What's on across {location}",
   homeUrl: '/',
   logoAuUrl: '',
@@ -26,7 +28,24 @@ export const FIELD_GROUPS = [
     id: 'brand',
     label: 'Brand & logo',
     fields: [
-      { key: 'siteName', label: 'Site name', type: 'text' },
+      {
+        key: 'siteName',
+        label: 'Default site name',
+        type: 'text',
+        help: 'Used when no country-specific site name is set.',
+      },
+      {
+        key: 'siteNameAu',
+        label: 'Australia site name',
+        type: 'text',
+        help: 'Shown in the header when visitors select Australia. Leave blank to use the default.',
+      },
+      {
+        key: 'siteNameNz',
+        label: 'New Zealand site name',
+        type: 'text',
+        help: 'Shown in the header when visitors select New Zealand. Leave blank to use the default.',
+      },
       {
         key: 'taglineTemplate',
         label: 'Tagline',
@@ -65,11 +84,13 @@ export const FIELD_GROUPS = [
 
 function cloneNavLinks(items) {
   if (!Array.isArray(items)) return DEFAULT_NAV_LINKS.map((item) => ({ ...item }))
-  return items.map((item) => ({
-    label: String(item?.label ?? '').trim(),
-    url: String(item?.url ?? '').trim(),
-    enabled: item?.enabled !== false && item?.enabled !== 0 && item?.enabled !== '0',
-  }))
+  return items
+    .map((item) => ({
+      label: String(item?.label ?? '').trim(),
+      url: String(item?.url ?? '').trim(),
+      enabled: item?.enabled !== false && item?.enabled !== 0 && item?.enabled !== '0',
+    }))
+    .filter((item) => item.label && item.url)
 }
 
 function cloneLogoUrl(raw) {
@@ -112,7 +133,9 @@ export function mergeHeaderSettings(input) {
   }
 
   for (const key of Object.keys(base)) {
-    if (key === 'navLinks' || key === 'logoAuUrl' || key === 'logoNzUrl') continue
+    if (key === 'navLinks' || key === 'logoAuUrl' || key === 'logoNzUrl' || key === 'siteNameAu' || key === 'siteNameNz') {
+      continue
+    }
     if (input && Object.prototype.hasOwnProperty.call(input, key)) {
       const field = fieldByKey.get(key)
       out[key] = field ? coerceValue(field, input[key], base[key]) : input[key]
@@ -128,6 +151,12 @@ export function mergeHeaderSettings(input) {
   }
   if (input && Object.prototype.hasOwnProperty.call(input, 'logoNzUrl')) {
     out.logoNzUrl = cloneLogoUrl(input.logoNzUrl)
+  }
+  if (input && Object.prototype.hasOwnProperty.call(input, 'siteNameAu')) {
+    out.siteNameAu = cloneLogoUrl(input.siteNameAu)
+  }
+  if (input && Object.prototype.hasOwnProperty.call(input, 'siteNameNz')) {
+    out.siteNameNz = cloneLogoUrl(input.siteNameNz)
   }
 
   // Legacy single logo field

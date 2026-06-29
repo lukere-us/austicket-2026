@@ -1,4 +1,5 @@
 import { ADMIN_PERMISSION_KEYS } from './adminPermissions.shared.js'
+import { SITE_SETTINGS_SECTIONS } from './siteSettingsSections.shared.js'
 
 const MAIN_ADMIN_ROLE = 'main_admin'
 const STANDARD_ACTIONS = ['list', 'show', 'new', 'edit', 'delete', 'bulkDelete']
@@ -91,6 +92,31 @@ export function applyPermissionsToResourceOptions(options, resourceId, extraActi
 
 export function canAccessPage(admin, pageKey) {
   return can(admin, `pages.${pageKey}`)
+}
+
+export function canAccessSiteSettingsSection(admin, sectionId) {
+  switch (sectionId) {
+    case 'sliderBanner':
+      return canAccessPage(admin, 'sliderBanner')
+    case 'homeListings':
+      return canAccessPage(admin, 'homeListings')
+    case 'footer':
+      return canAny(admin, ['pages.footer', 'pages.homeListings', 'pages.sliderBanner'])
+    case 'header':
+      return canAny(admin, ['pages.header', 'pages.homeListings', 'pages.sliderBanner'])
+    case 'partners':
+      return canAny(admin, ['pages.partners', 'pages.homeListings', 'pages.sliderBanner'])
+    default:
+      return false
+  }
+}
+
+export function accessibleSiteSettingsSections(admin) {
+  return SITE_SETTINGS_SECTIONS.filter((section) => canAccessSiteSettingsSection(admin, section.id))
+}
+
+export function canAccessAnySiteSettings(admin) {
+  return accessibleSiteSettingsSections(admin).length > 0
 }
 
 export function allPermissionKeys() {

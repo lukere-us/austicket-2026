@@ -7,6 +7,8 @@ import Adapter, { Database, Resource } from '@adminjs/sql'
 import { dbPool, getDbConfig } from './db.js'
 import { normalizeListingDatetime } from './components/listingDateUtils.js'
 import { applyPermissionsToResourceOptions, can, canAny, canAccessPage, isMainAdminRole } from './lib/adminPermissions.js'
+import { loadHeaderSettings } from './lib/headerSettings.js'
+import { resolveAdminBrandLogoFromHeader } from './lib/adminBrandLogo.js'
 import { ADMIN_PERMISSION_KEYS } from './lib/adminPermissions.shared.js'
 import {
   fetchRoleById,
@@ -914,10 +916,21 @@ export async function buildAdminJs() {
     }
   }
 
+  componentLoader.override('SidebarPages', path.join(__dirname, 'components', 'SidebarPages.jsx'))
+  componentLoader.override('SidebarBranding', path.join(__dirname, 'components', 'AdminSidebarBranding.jsx'))
+
+  let brandLogo = null
+  try {
+    brandLogo = resolveAdminBrandLogoFromHeader(await loadHeaderSettings(dbPool()), '/admin')
+  } catch {
+    brandLogo = null
+  }
+
   const admin = new AdminJS({
     rootPath: '/admin',
     branding: {
       companyName: 'AUS Ticket Lanka',
+      ...(brandLogo ? { logo: brandLogo } : {}),
       softwareBrothers: false,
     },
     locale: {

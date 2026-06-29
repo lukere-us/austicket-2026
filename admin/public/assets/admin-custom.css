@@ -74,6 +74,8 @@
 [data-css="sidebar"] nav a[href*="/pages/sliderBanner"]::before { content: 'slideshow'; }
 [data-css="sidebar"] nav a[href*="/pages/homeListings"]::before { content: 'view_list'; }
 [data-css="sidebar"] nav a[href*="/pages/footer"]::before { content: 'dock_to_bottom'; }
+[data-css="sidebar"] nav a[href*="/pages/header"]::before { content: 'tune'; }
+[data-css="sidebar"] nav a[href*="/pages/partners"]::before { content: 'image'; }
 [data-css="sidebar"] nav a[href*="/resources/listings"]::before { content: 'theaters'; }
 [data-css="sidebar"] nav a[href*="/resources/types"]::before { content: 'category'; }
 [data-css="sidebar"] nav a[href*="/resources/promotions"]::before { content: 'campaign'; }

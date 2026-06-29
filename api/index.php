@@ -584,30 +584,24 @@ if ($method === 'GET' && $path === '/listings') {
   }
 
   $orderBy = 'COALESCE(l.publish_at, l.created_at) DESC';
-  $hasPaging = isset($_GET['page']) || isset($_GET['per_page']);
-  if ($hasPaging) {
-    $page = max(1, (int)($_GET['page'] ?? 1));
-    $perPage = min(48, max(1, (int)($_GET['per_page'] ?? 12)));
-    $total = count_listing_cards($pdo, $extra, $params);
-    $totalPages = max(1, (int)ceil($total / $perPage));
-    if ($page > $totalPages) {
-      $page = $totalPages;
-    }
-    $offset = ($page - 1) * $perPage;
-    $items = fetch_listing_cards($pdo, $extra, $params, $orderBy, $perPage, $offset);
-    json_response([
-      'items' => $items,
-      'pagination' => [
-        'page' => $page,
-        'perPage' => $perPage,
-        'total' => $total,
-        'totalPages' => $totalPages,
-      ],
-    ]);
+  $page = max(1, (int)($_GET['page'] ?? 1));
+  $perPage = min(48, max(1, (int)($_GET['per_page'] ?? 12)));
+  $total = count_listing_cards($pdo, $extra, $params);
+  $totalPages = max(1, (int)ceil($total / $perPage));
+  if ($page > $totalPages) {
+    $page = $totalPages;
   }
-
-  $items = fetch_listing_cards($pdo, $extra, $params, $orderBy, 100);
-  json_response(['items' => $items]);
+  $offset = ($page - 1) * $perPage;
+  $items = fetch_listing_cards($pdo, $extra, $params, $orderBy, $perPage, $offset);
+  json_response([
+    'items' => $items,
+    'pagination' => [
+      'page' => $page,
+      'perPage' => $perPage,
+      'total' => $total,
+      'totalPages' => $totalPages,
+    ],
+  ]);
 }
 
 // Public: featured listings for homepage carousel
