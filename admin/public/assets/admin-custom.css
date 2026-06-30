@@ -84,6 +84,7 @@
 [data-css="sidebar"] nav a[href*="/pages/footer"]::before { content: 'dock_to_bottom'; }
 [data-css="sidebar"] nav a[href*="/pages/header"]::before { content: 'tune'; }
 [data-css="sidebar"] nav a[href*="/pages/partners"]::before { content: 'image'; }
+[data-css="sidebar"] nav a[href*="/pages/youtubeCarousel"]::before { content: 'video_library'; }
 [data-css="sidebar"] nav a[href*="/pages/help"]::before { content: 'help'; }
 [data-css="sidebar"] nav a[href*="/resources/listings"]::before { content: 'theaters'; }
 [data-css="sidebar"] nav a[href*="/resources/types"]::before { content: 'category'; }

@@ -35,7 +35,8 @@ $sqlFiles = @(
   '011_blogs_drop_schedule_columns.sql',
   '012_repair_show_times.sql',
   '013_header_settings.sql',
-  '014_partners_settings.sql'
+  '014_partners_settings.sql',
+  '016_youtube_carousel_settings.sql'
 )
 
 foreach ($file in $sqlFiles) {

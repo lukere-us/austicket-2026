@@ -5,7 +5,7 @@
 export function parseSettingsBody(req) {
   const body = req.body
   if (body && typeof body === 'object' && !Array.isArray(body) && Object.keys(body).length > 0) {
-    return body
+    return normalizeNestedSettingsFields(body)
   }
 
   const fields = req.fields
@@ -19,5 +19,30 @@ export function parseSettingsBody(req) {
     out[key] = val
   }
 
+  if (typeof out.payload === 'string') {
+    try {
+      const parsed = JSON.parse(out.payload)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return normalizeNestedSettingsFields(parsed)
+      }
+    } catch {
+      // fall through
+    }
+  }
+
+  return normalizeNestedSettingsFields(out)
+}
+
+function normalizeNestedSettingsFields(input) {
+  const out = { ...input }
+  for (const key of ['videos', 'logos', 'navLinks', 'footerLinks', 'cities']) {
+    if (typeof out[key] === 'string') {
+      try {
+        out[key] = JSON.parse(out[key])
+      } catch {
+        // keep raw string
+      }
+    }
+  }
   return out
 }

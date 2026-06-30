@@ -1,10 +1,22 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Navigation } from '@adminjs/design-system'
+import { useCurrentAdmin, useTranslation } from 'adminjs'
 import { useLocation, useNavigate } from 'react-router'
-import { useTranslation } from 'adminjs'
+import { canAccessSiteSettingsSection } from '../lib/adminPermissions.js'
+import { SITE_SETTINGS_SECTIONS } from '../lib/siteSettingsSections.shared.js'
 
 const SITE_SETTINGS_GROUP_ID = 'site-settings'
 const SIDEBAR_STORAGE_KEY = 'sidebarElements'
+
+const PAGE_ICONS = {
+  sliderBanner: 'Slideshow',
+  homeListings: 'ViewList',
+  footer: 'Menu',
+  header: 'Settings',
+  partners: 'Image',
+  youtubeCarousel: 'Video',
+  help: 'Help',
+}
 
 function readOpenElements() {
   try {
@@ -16,7 +28,8 @@ function readOpenElements() {
 }
 
 export default function SidebarPages(props) {
-  const { pages } = props
+  const { pages: pagesFromAdmin = [] } = props
+  const currentAdmin = useCurrentAdmin()
   const { translateLabel, translatePage } = useTranslation()
   const location = useLocation()
   const navigate = useNavigate()
@@ -28,23 +41,60 @@ export default function SidebarPages(props) {
     return () => window.removeEventListener('storage', onStorage)
   }, [])
 
-  const isActive = useCallback((page) => Boolean(location.pathname.match(`/pages/${page.name}`)), [location.pathname])
+  const isActive = useCallback((pageName) => Boolean(location.pathname.match(`/pages/${pageName}`)), [location.pathname])
 
   const childElements = useMemo(() => {
-    if (!pages?.length) return []
+    const admin = currentAdmin?.id != null ? currentAdmin : null
+    const iconByName = new Map((pagesFromAdmin || []).map((page) => [page.name, page.icon]))
 
-    return pages.map((page) => ({
-      id: page.name,
-      label: translatePage(page.name),
-      isSelected: isActive(page),
-      icon: page.icon,
-      href: `/admin/pages/${page.name}`,
+    const siteSettings = SITE_SETTINGS_SECTIONS.filter((section) =>
+      canAccessSiteSettingsSection(admin, section.id),
+    ).map((section) => ({
+      id: section.id,
+      label: translatePage(section.id),
+      isSelected: isActive(section.id),
+      icon: iconByName.get(section.id) || PAGE_ICONS[section.id] || 'Settings',
+      href: `/admin/pages/${section.id}`,
       onClick: (event, element) => {
         event.preventDefault()
         if (element.href) navigate(element.href)
       },
     }))
-  }, [isActive, navigate, pages, translatePage])
+
+    const items = [...siteSettings]
+
+    if (admin) {
+      items.push({
+        id: 'help',
+        label: translatePage('help'),
+        isSelected: isActive('help'),
+        icon: iconByName.get('help') || PAGE_ICONS.help,
+        href: '/admin/pages/help',
+        onClick: (event, element) => {
+          event.preventDefault()
+          if (element.href) navigate(element.href)
+        },
+      })
+    }
+
+    const known = new Set(items.map((item) => item.id))
+    for (const page of pagesFromAdmin || []) {
+      if (!page?.name || known.has(page.name)) continue
+      items.push({
+        id: page.name,
+        label: translatePage(page.name),
+        isSelected: isActive(page.name),
+        icon: page.icon || 'Document',
+        href: `/admin/pages/${page.name}`,
+        onClick: (event, element) => {
+          event.preventDefault()
+          if (element.href) navigate(element.href)
+        },
+      })
+    }
+
+    return items
+  }, [currentAdmin, isActive, navigate, pagesFromAdmin, translatePage])
 
   if (!childElements.length) return null
 

@@ -115,12 +115,16 @@ export default function RolePermissionsForm(props) {
   const isNew = action?.name === 'new'
   const roleId = isNew ? '' : resolveRoleId(record)
 
+  const initialIsMainAdmin = !isNew && String(record?.params?._roleIsMainAdmin ?? '') === '1'
+
   const [saving, setSaving] = useState(false)
   const [roleName, setRoleName] = useState(() => (isNew ? '' : resolveRoleName(record)))
-  const [selected, setSelected] = useState(() => new Set(isNew ? [] : parseAllowedKeys(record)))
-  const [isMainAdmin, setIsMainAdmin] = useState(
-    () => !isNew && String(record?.params?._roleIsMainAdmin ?? '') === '1'
-  )
+  const [selected, setSelected] = useState(() => {
+    if (isNew) return new Set()
+    if (initialIsMainAdmin) return new Set(ADMIN_PERMISSION_KEYS)
+    return new Set(parseAllowedKeys(record))
+  })
+  const [isMainAdmin, setIsMainAdmin] = useState(() => initialIsMainAdmin)
   const hydratedRef = useRef(isNew)
 
   const allKeys = useMemo(() => ADMIN_PERMISSION_KEYS, [])
@@ -133,9 +137,15 @@ export default function RolePermissionsForm(props) {
 
     hydratedRef.current = true
     setRoleName(resolveRoleName(record))
-    setIsMainAdmin(String(record?.params?._roleIsMainAdmin ?? '') === '1')
-    setSelected(new Set(parseAllowedKeys(record)))
+    const nextIsMainAdmin = String(record?.params?._roleIsMainAdmin ?? '') === '1'
+    setIsMainAdmin(nextIsMainAdmin)
+    setSelected(new Set(nextIsMainAdmin ? ADMIN_PERMISSION_KEYS : parseAllowedKeys(record)))
   }, [isNew, record?.params?._roleAllowedKeys, record?.params?._roleIsMainAdmin, record?.params?.name])
+
+  useEffect(() => {
+    if (!isMainAdmin) return
+    setSelected(new Set(ADMIN_PERMISSION_KEYS))
+  }, [isMainAdmin, allKeys])
 
   const toggleKey = (key) => {
     if (isMainAdmin) return

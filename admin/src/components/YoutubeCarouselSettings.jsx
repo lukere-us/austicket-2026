@@ -1,0 +1,267 @@
+import React, { useEffect, useRef, useState } from 'react'
+import { useNotice } from 'adminjs'
+import { Box, Button, H2, H4, Loader, Text } from '@adminjs/design-system'
+import FormSaveChrome from './FormSaveChrome.jsx'
+import { SettingsFieldRow } from './SettingsFieldRow.jsx'
+import { readYoutubeCarouselFormValues } from '../lib/readSettingsForm.js'
+import {
+  defaultYoutubeCarouselSettings,
+  youtubeCarouselSettingFields,
+  mergeYoutubeCarouselSettings,
+  extractYoutubeVideoId,
+} from '../lib/youtubeCarouselSettings.shared.js'
+
+const rowInputStyle = {
+  width: '100%',
+  boxSizing: 'border-box',
+  padding: '8px 12px',
+  borderRadius: 8,
+  border: '1px solid #d4d4d8',
+  fontSize: 14,
+}
+
+function newVideoId() {
+  return `video-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
+}
+
+function VideoRowsEditor({ rows, onChange }) {
+  const updateRow = (index, patch) => {
+    onChange(rows.map((row, i) => (i === index ? { ...row, ...patch } : row)))
+  }
+
+  const removeRow = (index) => {
+    onChange(rows.filter((_, i) => i !== index))
+  }
+
+  const moveRow = (index, dir) => {
+    const next = [...rows]
+    const target = index + dir
+    if (target < 0 || target >= next.length) return
+    const tmp = next[index]
+    next[index] = next[target]
+    next[target] = tmp
+    onChange(next)
+  }
+
+  const addRow = () => {
+    onChange([...rows, { id: newVideoId(), title: '', youtubeUrl: '', enabled: true }])
+  }
+
+  return (
+    <Box mb="xxl">
+      <H4 mb="md">YouTube videos</H4>
+      <Text variant="sm" color="grey60" mb="md">
+        Add YouTube watch, shorts, or youtu.be links. Visitors can browse the carousel and open videos in a
+        popup player on the homepage.
+      </Text>
+      {rows.map((row, index) => (
+        <Box
+          key={row.id || `video-row-${index}`}
+          mb="md"
+          p="md"
+          borderRadius="lg"
+          style={{ border: '1px solid #e4e4e7', background: '#fafafa' }}
+        >
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb="md" flexWrap="wrap" gap="sm">
+            <Text variant="sm" fontWeight="bold">
+              Video {index + 1}
+            </Text>
+            <Box display="flex" gap="sm" alignItems="center">
+              <Button type="button" size="sm" variant="text" disabled={index === 0} onClick={() => moveRow(index, -1)}>
+                Up
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="text"
+                disabled={index === rows.length - 1}
+                onClick={() => moveRow(index, 1)}
+              >
+                Down
+              </Button>
+              <Button type="button" size="sm" variant="text" onClick={() => removeRow(index)}>
+                Remove
+              </Button>
+            </Box>
+          </Box>
+
+          <Box display="grid" style={{ gridTemplateColumns: '1fr 1fr auto', gap: 12 }} alignItems="end">
+            <Box>
+              <Text variant="sm" mb="sm">
+                Title (optional)
+              </Text>
+              <input
+                style={rowInputStyle}
+                value={row.title}
+                onChange={(e) => updateRow(index, { title: e.target.value })}
+                placeholder="Video title"
+              />
+            </Box>
+            <Box>
+              <Text variant="sm" mb="sm">
+                YouTube URL
+              </Text>
+              <input
+                style={rowInputStyle}
+                value={row.youtubeUrl}
+                onChange={(e) => updateRow(index, { youtubeUrl: e.target.value })}
+                placeholder="https://www.youtube.com/watch?v=..."
+              />
+              {row.youtubeUrl?.trim() && !extractYoutubeVideoId(row.youtubeUrl) ? (
+                <Text variant="sm" color="danger" mt="sm">
+                  Could not read a video ID from this URL. Use a watch, shorts, or youtu.be link.
+                </Text>
+              ) : null}
+            </Box>
+            <Box pb="xs">
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                <input
+                  type="checkbox"
+                  checked={Boolean(row.enabled)}
+                  onChange={(e) => updateRow(index, { enabled: e.target.checked })}
+                />
+                Show
+              </label>
+            </Box>
+          </Box>
+        </Box>
+      ))}
+      <Button type="button" variant="text" onClick={addRow}>
+        Add video
+      </Button>
+    </Box>
+  )
+}
+
+export default function YoutubeCarouselSettings() {
+  const sendNotice = useNotice()
+  const sendNoticeRef = useRef(sendNotice)
+  sendNoticeRef.current = sendNotice
+
+  const formRef = useRef(null)
+  const [settings, setSettings] = useState(() => defaultYoutubeCarouselSettings())
+  const [fields] = useState(() => youtubeCarouselSettingFields())
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [formKey, setFormKey] = useState(0)
+  const fetchStartedRef = useRef(false)
+
+  const applySettings = (next) => {
+    const merged = mergeYoutubeCarouselSettings(next)
+    setSettings(merged)
+    setFormKey((k) => k + 1)
+  }
+
+  useEffect(() => {
+    if (fetchStartedRef.current) return
+    fetchStartedRef.current = true
+
+    let alive = true
+
+    const run = async () => {
+      try {
+        const res = await fetch('/admin/api/settings/youtube-carousel', {
+          credentials: 'include',
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+        })
+        if (!res.ok) throw new Error(`Failed to load settings (${res.status})`)
+        const data = await res.json()
+        if (!alive) return
+        if (data?.settings) applySettings(data.settings)
+      } catch (e) {
+        if (!alive) return
+        sendNoticeRef.current({ type: 'error', message: e?.message || String(e) })
+      } finally {
+        if (alive) setLoading(false)
+      }
+    }
+
+    void run()
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  const onChange = (key, value) => {
+    setSettings((prev) => ({ ...prev, [key]: value }))
+  }
+
+  const onSave = async () => {
+    setSaving(true)
+    try {
+      const scalar = readYoutubeCarouselFormValues(formRef.current, fields)
+      const payload = mergeYoutubeCarouselSettings({
+        ...scalar,
+        videos: settings.videos,
+      })
+
+      if (payload.enabled && (!payload.videos || payload.videos.length === 0)) {
+        sendNotice({
+          type: 'warning',
+          message:
+            'Carousel is enabled but no valid YouTube videos were saved. Add at least one watch, shorts, or youtu.be URL.',
+        })
+      }
+
+      const res = await fetch('/admin/api/settings/youtube-carousel', {
+        method: 'POST',
+        credentials: 'include',
+        cache: 'no-store',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+          Pragma: 'no-cache',
+        },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) throw new Error(`Failed to save settings (${res.status})`)
+      const data = await res.json()
+      if (data?.settings) applySettings(data.settings)
+
+      const notice = data?.notice
+      if (notice) sendNotice(notice)
+      else sendNotice({ type: 'success', message: 'YouTube carousel settings saved.' })
+    } catch (e) {
+      sendNoticeRef.current({ type: 'error', message: e?.message || String(e) })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <Box variant="white" p="xxl">
+        <Loader />
+      </Box>
+    )
+  }
+
+  return (
+    <Box variant="white" p="xxl">
+      <H2>YouTube carousel</H2>
+      <Text variant="sm" color="grey60" mt="sm" mb="xl">
+        Manage the &quot;Our Streaming&quot; video carousel at the bottom of the homepage. Add YouTube links;
+        visitors tap a video to watch it in a popup.
+      </Text>
+
+      <form ref={formRef} key={formKey} onSubmit={(e) => e.preventDefault()}>
+        {fields.map((group) => (
+          <Box key={group.id} mb="xxl">
+            <H4 mb="md">{group.label}</H4>
+            {group.fields.map((field) => (
+              <SettingsFieldRow key={field.key} field={field} value={settings[field.key]} onChange={onChange} />
+            ))}
+          </Box>
+        ))}
+
+        <VideoRowsEditor
+          rows={settings.videos?.length ? settings.videos : []}
+          onChange={(videos) => setSettings((prev) => ({ ...prev, videos }))}
+        />
+
+        <FormSaveChrome saving={saving} onSave={onSave} />
+      </form>
+    </Box>
+  )
+}

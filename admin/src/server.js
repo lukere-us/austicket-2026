@@ -16,6 +16,7 @@ import { dbPool, getDbConfig } from './db.js'
 import { ensureShowTimesTable } from './lib/ensureShowTimesTable.js'
 import { ensureBlogsSchema } from './lib/ensureBlogsSchema.js'
 import { ensurePageVisitsVisitedAt } from './lib/ensurePageVisitsVisitedAt.js'
+import { ensureMainAdminPermissions } from './lib/ensureMainAdminPermissions.js'
 import { waitForDatabase } from './lib/waitForDatabase.js'
 import {
   homeHeroSettingFields,
@@ -43,6 +44,11 @@ import {
   loadPartnersSettings,
   savePartnersSettings,
 } from './lib/partnersSettings.js'
+import {
+  youtubeCarouselSettingFields,
+  loadYoutubeCarouselSettings,
+  saveYoutubeCarouselSettings,
+} from './lib/youtubeCarouselSettings.js'
 import { parseSettingsBody } from './lib/parseSettingsBody.js'
 import { can, canAny, loadAdminPermissions } from './lib/adminPermissions.js'
 import { attachAdminSessionRefresh, sessionWithAdminRefresh } from './lib/refreshAdminSession.js'
@@ -137,6 +143,7 @@ async function start() {
   await ensureShowTimesTable(dbPool())
   await ensureBlogsSchema(dbPool())
   await ensurePageVisitsVisitedAt(dbPool())
+  await ensureMainAdminPermissions(dbPool())
 
   app.use((req, res, next) => {
     const startAt = Date.now()
@@ -755,6 +762,40 @@ async function start() {
       res.status(500).json({ error: e?.message || String(e) })
     }
   })
+
+  settingsApi.get(
+    '/youtube-carousel',
+    requireAnyPermission('pages.youtubeCarousel', 'pages.homeListings', 'pages.sliderBanner'),
+    async (_req, res) => {
+      try {
+        const pool = dbPool()
+        jsonNoCache(res, {
+          settings: await loadYoutubeCarouselSettings(pool),
+          fields: youtubeCarouselSettingFields(),
+        })
+      } catch (e) {
+        res.status(500).json({ error: e?.message || String(e) })
+      }
+    },
+  )
+
+  settingsApi.post(
+    '/youtube-carousel',
+    requireAnyPermission('pages.youtubeCarousel', 'pages.homeListings', 'pages.sliderBanner'),
+    async (req, res) => {
+      try {
+        const pool = dbPool()
+        const settings = await saveYoutubeCarouselSettings(pool, parseSettingsBody(req))
+        jsonNoCache(res, {
+          settings,
+          fields: youtubeCarouselSettingFields(),
+          notice: { message: 'YouTube carousel settings saved.', type: 'success' },
+        })
+      } catch (e) {
+        res.status(500).json({ error: e?.message || String(e) })
+      }
+    },
+  )
 
   app.use(
     `${adminJs.options.rootPath}/api/settings`,
