@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AUS Ticket Lanka — Hosting Guide</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg-deep: #07080f;
+      --bg-card: rgba(18, 22, 38, 0.72);
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #e8ecf4;
+      --muted: #8b95ad;
+      --accent: #6ee7ff;
+      --accent-2: #a78bfa;
+      --accent-3: #34d399;
+      --warn: #fbbf24;
+      --danger: #f87171;
+      --glow: 0 0 60px rgba(110, 231, 255, 0.15);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      background: var(--bg-deep);
+      color: var(--text);
+      line-height: 1.65;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Ambient art background */
+    .art-bg {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    .orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: 0.45;
+      animation: drift 18s ease-in-out infinite alternate;
+    }
+
+    .orb-1 {
+      width: 55vw;
+      height: 55vw;
+      top: -15%;
+      left: -10%;
+      background: radial-gradient(circle, #1e3a5f 0%, transparent 70%);
+    }
+
+    .orb-2 {
+      width: 45vw;
+      height: 45vw;
+      top: 30%;
+      right: -15%;
+      background: radial-gradient(circle, #3b1f6e 0%, transparent 70%);
+      animation-delay: -6s;
+    }
+
+    .orb-3 {
+      width: 35vw;
+      height: 35vw;
+      bottom: -10%;
+      left: 25%;
+      background: radial-gradient(circle, #0f4c3a 0%, transparent 70%);
+      animation-delay: -12s;
+    }
+
+    .grid-overlay {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, black 20%, transparent 80%);
+    }
+
+    .noise {
+      position: absolute;
+      inset: 0;
+      opacity: 0.04;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    @keyframes drift {
+      from { transform: translate(0, 0) scale(1); }
+      to   { transform: translate(3%, 4%) scale(1.08); }
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes shimmer {
+      0%   { background-position: -200% center; }
+      100% { background-position: 200% center; }
+    }
+
+    @keyframes pulse-ring {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(110, 231, 255, 0.25); }
+      50%      { box-shadow: 0 0 0 12px rgba(110, 231, 255, 0); }
+    }
+
+    /* Layout */
+    .wrap {
+      position: relative;
+      z-index: 1;
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 3rem 1.5rem 5rem;
+    }
+
+    /* Hero */
+    .hero {
+      text-align: center;
+      margin-bottom: 3.5rem;
+      animation: fadeUp 0.9s ease both;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.35rem 1rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.04);
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 1.25rem;
+    }
+
+    .badge::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent-3);
+      animation: pulse-ring 2s ease infinite;
+    }
+
+    h1 {
+      font-family: 'Syne', sans-serif;
+      font-size: clamp(2.2rem, 6vw, 3.6rem);
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+      margin-bottom: 1rem;
+      background: linear-gradient(135deg, #fff 0%, var(--accent) 45%, var(--accent-2) 100%);
+      background-size: 200% auto;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: shimmer 6s linear infinite;
+    }
+
+    .hero p {
+      color: var(--muted);
+      font-size: 1.1rem;
+      max-width: 560px;
+      margin: 0 auto;
+    }
+
+    /* Cards */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 1.75rem 2rem;
+      margin-bottom: 1.5rem;
+      backdrop-filter: blur(20px);
+      box-shadow: var(--glow);
+      animation: fadeUp 0.8s ease both;
+      transition: border-color 0.3s, transform 0.3s;
+    }
+
+    .card:hover {
+      border-color: rgba(110, 231, 255, 0.2);
+      transform: translateY(-2px);
+    }
+
+    .card:nth-child(2) { animation-delay: 0.1s; }
+    .card:nth-child(3) { animation-delay: 0.15s; }
+    .card:nth-child(4) { animation-delay: 0.2s; }
+    .card:nth-child(5) { animation-delay: 0.25s; }
+    .card:nth-child(6) { animation-delay: 0.3s; }
+    .card:nth-child(7) { animation-delay: 0.35s; }
+    .card:nth-child(8) { animation-delay: 0.4s; }
+    .card:nth-child(9) { animation-delay: 0.45s; }
+    .card:nth-child(10) { animation-delay: 0.5s; }
+
+    h2 {
+      font-family: 'Syne', sans-serif;
+      font-size: 1.35rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    h2 .num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 2rem;
+      height: 2rem;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      background: linear-gradient(135deg, rgba(110,231,255,0.2), rgba(167,139,250,0.2));
+      border: 1px solid rgba(110,231,255,0.25);
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+
+    h3 {
+      font-family: 'Syne', sans-serif;
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--accent-2);
+      margin: 1.25rem 0 0.6rem;
+    }
+
+    p { margin-bottom: 0.75rem; color: #c5cce0; }
+    p:last-child { margin-bottom: 0; }
+
+    /* Tables */
+    .table-wrap {
+      overflow-x: auto;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      margin: 1rem 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    th {
+      text-align: left;
+      padding: 0.75rem 1rem;
+      background: rgba(110, 231, 255, 0.06);
+      color: var(--accent);
+      font-weight: 600;
+      font-size: 0.78rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+    }
+
+    td {
+      padding: 0.7rem 1rem;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      color: #c5cce0;
+    }
+
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+
+    .tag {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .tag-ok   { background: rgba(52,211,153,0.15); color: var(--accent-3); }
+    .tag-warn { background: rgba(251,191,36,0.15);  color: var(--warn); }
+    .tag-bad  { background: rgba(248,113,113,0.15); color: var(--danger); }
+    .tag-info { background: rgba(110,231,255,0.12);  color: var(--accent); }
+
+    /* Code blocks */
+    pre {
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.1rem 1.25rem;
+      overflow-x: auto;
+      margin: 0.85rem 0;
+      position: relative;
+    }
+
+    pre::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2), var(--accent-3));
+      border-radius: 12px 12px 0 0;
+      opacity: 0.6;
+    }
+
+    code, pre {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      line-height: 1.55;
+    }
+
+    :not(pre) > code {
+      background: rgba(110, 231, 255, 0.1);
+      color: var(--accent);
+      padding: 0.15rem 0.45rem;
+      border-radius: 5px;
+      font-size: 0.85em;
+    }
+
+    /* Architecture diagram */
+    .arch {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0.75rem;
+      margin: 1.25rem 0;
+    }
+
+    .arch-box {
+      padding: 1rem;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.03);
+      text-align: center;
+      transition: transform 0.25s, border-color 0.25s;
+    }
+
+    .arch-box:hover {
+      transform: scale(1.03);
+      border-color: rgba(167,139,250,0.35);
+    }
+
+    .arch-box .icon { font-size: 1.6rem; margin-bottom: 0.4rem; }
+    .arch-box .label { font-weight: 700; font-size: 0.9rem; font-family: 'Syne', sans-serif; }
+    .arch-box .sub { font-size: 0.75rem; color: var(--muted); margin-top: 0.2rem; }
+
+    /* Alert boxes */
+    .alert {
+      border-radius: 12px;
+      padding: 1rem 1.2rem;
+      margin: 1rem 0;
+      border-left: 3px solid;
+      font-size: 0.92rem;
+    }
+
+    .alert-info {
+      background: rgba(110, 231, 255, 0.07);
+      border-color: var(--accent);
+      color: #b8e8f5;
+    }
+
+    .alert-warn {
+      background: rgba(251, 191, 36, 0.07);
+      border-color: var(--warn);
+      color: #fde8a8;
+    }
+
+    /* Steps list */
+    ol.steps {
+      list-style: none;
+      counter-reset: step;
+      margin: 0.5rem 0;
+    }
+
+    ol.steps li {
+      counter-increment: step;
+      position: relative;
+      padding-left: 2.5rem;
+      margin-bottom: 0.6rem;
+      color: #c5cce0;
+    }
+
+    ol.steps li::before {
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 0.1rem;
+      width: 1.6rem;
+      height: 1.6rem;
+      border-radius: 50%;
+      background: linear-gradient(135deg, rgba(110,231,255,0.25), rgba(167,139,250,0.25));
+      border: 1px solid rgba(110,231,255,0.3);
+      font-size: 0.75rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent);
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      margin-top: 3rem;
+      padding-top: 2rem;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    footer strong {
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* Nav pills */
+    .toc {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      justify-content: center;
+      margin-bottom: 2.5rem;
+      animation: fadeUp 0.7s ease both;
+    }
+
+    .toc a {
+      padding: 0.4rem 0.9rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.03);
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.8rem;
+      font-weight: 500;
+      transition: all 0.25s;
+    }
+
+    .toc a:hover {
+      color: var(--accent);
+      border-color: rgba(110,231,255,0.35);
+      background: rgba(110,231,255,0.08);
+    }
+
+    @media (max-width: 600px) {
+      .card { padding: 1.25rem 1.25rem; }
+      h1 { font-size: 2rem; }
+    }
+
+    @media print {
+      .art-bg, .toc { display: none; }
+      body { background: #fff; color: #111; }
+      .card { border: 1px solid #ddd; box-shadow: none; background: #fff; }
+      h1 { -webkit-text-fill-color: #111; color: #111; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="art-bg" aria-hidden="true">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+    <div class="grid-overlay"></div>
+    <div class="noise"></div>
+  </div>
+
+  <div class="wrap">
+
+    <header class="hero">
+      <div class="badge">Deployment Guide</div>
+      <h1>AUS Ticket Lanka<br>Hosting Guide</h1>
+      <p>Fresh VPS setup for API, Admin panel, and public site — with fixes for every issue from the InterServer deploy.</p>
+    </header>
+
+    <nav class="toc">
+      <a href="#overview">Overview</a>
+      <a href="#stack">Server Stack</a>
+      <a href="#database">Database</a>
+      <a href="#upload">Upload</a>
+      <a href="#config">Config</a>
+      <a href="#admin">Admin</a>
+      <a href="#nginx">Nginx</a>
+      <a href="#dns">DNS</a>
+      <a href="#shared">Shared Hosting</a>
+      <a href="#mistakes">Mistakes</a>
+    </nav>
+
+    <!-- OVERVIEW -->
+    <section class="card" id="overview">
+      <h2><span class="num">◈</span> What You're Hosting</h2>
+
+      <div class="arch">
+        <div class="arch-box">
+          <div class="icon">🌐</div>
+          <div class="label">Frontend</div>
+          <div class="sub">Next.js · port 3000</div>
+        </div>
+        <div class="arch-box">
+          <div class="icon">⚡</div>
+          <div class="label">API</div>
+          <div class="sub">PHP · /api/</div>
+        </div>
+        <div class="arch-box">
+          <div class="icon">🛠</div>
+          <div class="label">Admin</div>
+          <div class="sub">AdminJS 7 · /admin</div>
+        </div>
+        <div class="arch-box">
+          <div class="icon">🗄</div>
+          <div class="label">Database</div>
+          <div class="sub">MySQL · aus-booking</div>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Part</th><th>Tech</th><th>URL</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>API</td><td>PHP 8.2</td><td><code>https://yoursite.com/api/</code></td></tr>
+            <tr><td>Admin</td><td>Node.js AdminJS 7</td><td><code>https://yoursite.com/admin</code></td></tr>
+            <tr><td>Frontend</td><td>Next.js 16</td><td><code>https://yoursite.com/</code></td></tr>
+            <tr><td>Database</td><td>MySQL 8+</td><td><code>aus-booking</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="alert alert-warn">
+        <strong>Note:</strong> There is no <code>frontend/</code> folder in the repo yet. A <strong>502 on <code>/</code></strong> is expected until the Next.js app is deployed.
+      </div>
+    </section>
+
+    <!-- STACK -->
+    <section class="card" id="stack">
+      <h2><span class="num">1</span> Server Stack (one-time)</h2>
+      <p>SSH into your VPS and install the full stack:</p>
+      <pre>ssh root@YOUR_VPS_IP
+
+apt update &amp;&amp; apt upgrade -y
+apt install -y nginx mysql-server php8.2-fpm php8.2-mysql \
+  php8.2-mbstring php8.2-xml php8.2-curl git unzip
+curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+apt install -y nodejs
+npm install -g pm2</pre>
+    </section>
+
+    <!-- DATABASE -->
+    <section class="card" id="database">
+      <h2><span class="num">2</span> Database</h2>
+      <pre>mysql -u root -p</pre>
+      <pre>CREATE DATABASE `aus-booking` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'austicket'@'localhost' IDENTIFIED BY 'STRONG_PASSWORD';
+GRANT ALL ON `aus-booking`.* TO 'austicket'@'localhost';
+FLUSH PRIVILEGES;
+EXIT;</pre>
+      <p>Import all <code>db/*.sql</code> files in numeric order. <strong>Skip</strong> <code>002_seed_dev.sql</code> on a live site.</p>
+    </section>
+
+    <!-- UPLOAD -->
+    <section class="card" id="upload">
+      <h2><span class="num">3</span> Upload Project</h2>
+      <pre>mkdir -p /var/www/austicket
+cd /var/www/austicket
+git clone YOUR_REPO_URL .
+mkdir -p Upload &amp;&amp; chmod -R 775 Upload</pre>
+      <p>Expected layout on the server:</p>
+      <pre>/var/www/austicket/
+├── api/          ← PHP API
+├── admin/        ← AdminJS app
+├── db/           ← SQL migrations
+└── Upload/       ← images (writable)</pre>
+    </section>
+
+    <!-- CONFIG -->
+    <section class="card" id="config">
+      <h2><span class="num">4</span> Configuration</h2>
+
+      <h3>api/config.php</h3>
+      <pre>define('host', 'localhost');
+define('user', 'austicket');
+define('pwd', 'STRONG_PASSWORD');
+define('db', 'aus-booking');
+define('JWT_SECRET', 'long-random-string-here');
+
+define('CORS_ALLOW_ORIGINS', [
+  'http://YOUR_VPS_IP',
+  'https://yoursite.com',
+  'https://www.yoursite.com',
+]);</pre>
+
+      <h3>admin/.env</h3>
+      <pre>PORT=3001
+NODE_ENV=production
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_USER=austicket
+DB_PASSWORD=STRONG_PASSWORD
+DB_NAME=aus-booking
+SESSION_SECRET=another-long-random-string</pre>
+    </section>
+
+    <!-- ADMIN -->
+    <section class="card" id="admin">
+      <h2><span class="num">5</span> Admin Panel — Critical Steps</h2>
+
+      <div class="alert alert-info">
+        Use the <strong>package-lock.json from your repo</strong>. Do not generate a new lock file on the server with an old package.json — that caused AdminJS v6 to install.
+      </div>
+
+      <pre>cd /var/www/austicket/admin
+pm2 stop austicket-admin 2>/dev/null || true
+rm -rf node_modules
+npm ci --legacy-peer-deps
+
+# Must show adminjs@7.8.17
+npm ls adminjs</pre>
+
+      <h3>Correct imports (AdminJS v7)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Import</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td><code>import { AdminJS, ComponentLoader } from 'adminjs'</code></td><td><span class="tag tag-ok">✓ Use this</span></td></tr>
+            <tr><td><code>import { Adapter, Database, Resource } from '@adminjs/sql'</code></td><td><span class="tag tag-ok">✓ Use this</span></td></tr>
+            <tr><td><code>new Adapter('mysql2', { ... })</code></td><td><span class="tag tag-ok">✓ Use mysql2</span></td></tr>
+            <tr><td><code>import AdminJS from 'adminjs/lib/adminjs.js'</code></td><td><span class="tag tag-bad">✗ Do NOT use</span></td></tr>
+            <tr><td><code>new Adapter('mysql', ...)</code></td><td><span class="tag tag-bad">✗ Do NOT use</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Build &amp; start</h3>
+      <pre>NODE_ENV=production NODE_OPTIONS=--max-old-space-size=1536 \
+  node -e "import('./src/adminjs.js').then(m => m.buildAdminJs())\
+  .then(a => a.initialize()).then(() => console.log('OK'))"
+
+NODE_ENV=production pm2 start src/server.js --name austicket-admin \
+  --node-args="--max-old-space-size=1536"
+pm2 save</pre>
+    </section>
+
+    <!-- NGINX -->
+    <section class="card" id="nginx">
+      <h2><span class="num">6</span> Nginx</h2>
+      <p>Create <code>/etc/nginx/sites-available/austicket</code>:</p>
+      <pre>server {
+    listen 80;
+    server_name yoursite.com www.yoursite.com YOUR_VPS_IP;
+
+    location / {
+        return 200 'Site OK — API: /api/  Admin: /admin';
+        add_header Content-Type text/plain;
+    }
+
+    location /api {
+        alias /var/www/austicket/api;
+        try_files $uri $uri/ @api;
+        location ~ \.php$ {
+            include fastcgi_params;
+            fastcgi_param SCRIPT_FILENAME /var/www/austicket/api/index.php;
+            fastcgi_pass unix:/run/php/php8.2-fpm.sock;
+        }
+    }
+
+    location @api {
+        rewrite ^/api/(.*)$ /api/index.php last;
+    }
+
+    location /admin {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}</pre>
+      <pre>ln -s /etc/nginx/sites-available/austicket /etc/nginx/sites-enabled/
+nginx -t &amp;&amp; systemctl reload nginx</pre>
+
+      <h3>Verify</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>URL</th><th>Expected</th></tr></thead>
+          <tbody>
+            <tr><td><code>/api/</code></td><td><span class="tag tag-ok">{"status":"ok"}</span></td></tr>
+            <tr><td><code>/admin</code></td><td><span class="tag tag-ok">Admin login page</span></td></tr>
+            <tr><td><code>/</code></td><td><span class="tag tag-warn">Placeholder text (until frontend)</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- DNS -->
+    <section class="card" id="dns">
+      <h2><span class="num">7</span> DNS — Namecheap</h2>
+      <p>Use <strong>Namecheap BasicDNS</strong> (not Custom DNS) so you can edit A records.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Type</th><th>Host</th><th>Value</th></tr></thead>
+          <tbody>
+            <tr><td>A Record</td><td><code>@</code></td><td>YOUR_VPS_IP</td></tr>
+            <tr><td>A Record</td><td><code>www</code></td><td>YOUR_VPS_IP</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>After DNS propagates, add SSL:</p>
+      <pre>apt install -y certbot python3-certbot-nginx
+certbot --nginx -d yoursite.com -d www.yoursite.com</pre>
+    </section>
+
+    <!-- SHARED -->
+    <section class="card" id="shared">
+      <h2><span class="num">8</span> Namecheap Shared Hosting Only</h2>
+      <p>Shared hosting runs <strong>PHP + MySQL</strong> only. Use a split layout:</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Part</th><th>Where</th></tr></thead>
+          <tbody>
+            <tr><td>API + Uploads</td><td>Namecheap <code>public_html</code></td></tr>
+            <tr><td>Frontend</td><td>Vercel (free)</td></tr>
+            <tr><td>Admin</td><td>VPS or cPanel Node.js</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>See <code>SHARED-HOSTING-DEPLOYMENT.md</code> for the full step-by-step.</p>
+    </section>
+
+    <!-- MISTAKES -->
+    <section class="card" id="mistakes">
+      <h2><span class="num">!</span> Common Mistakes</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Problem</th><th>Cause</th><th>Fix</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><span class="tag tag-bad">adminjs@6.8.7</span></td>
+              <td>Old lock file on server</td>
+              <td><code>npm ci</code> with repo lock file</td>
+            </tr>
+            <tr>
+              <td><span class="tag tag-bad">ERR_PACKAGE_PATH_NOT_EXPORTED</span></td>
+              <td>Linux subpath imports</td>
+              <td>Use standard <code>from 'adminjs'</code></td>
+            </tr>
+            <tr>
+              <td><span class="tag tag-bad">mysql is not supported</span></td>
+              <td>Wrong adapter dialect</td>
+              <td>Use <code>Adapter('mysql2')</code></td>
+            </tr>
+            <tr>
+              <td><span class="tag tag-bad">502 on /</span></td>
+              <td>Frontend not running</td>
+              <td>Deploy Next.js or use placeholder</td>
+            </tr>
+            <tr>
+              <td><span class="tag tag-bad">502 on /admin</span></td>
+              <td>Admin crashed</td>
+              <td><code>pm2 logs austicket-admin</code></td>
+            </tr>
+            <tr>
+              <td><span class="tag tag-bad">DROP COLUMN IF EXISTS</span></td>
+              <td>Old MySQL version</td>
+              <td>Fixed in <code>ensureBlogsSchema.js</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Production checklist</h3>
+      <ol class="steps">
+        <li>HTTPS enabled (Let's Encrypt)</li>
+        <li><code>JWT_SECRET</code> and <code>SESSION_SECRET</code> changed</li>
+        <li>Strong MySQL password</li>
+        <li>CORS includes your real frontend domain</li>
+        <li><code>Upload/</code> writable by PHP</li>
+        <li>Do not import <code>002_seed_dev.sql</code></li>
+        <li>Create a real admin user in the database</li>
+      </ol>
+    </section>
+
+    <footer>
+      <p><strong>AUS Ticket Lanka</strong> · Hosting Guide · 2026</p>
+      <p style="margin-top:0.4rem">Open this file in any browser — no server needed.</p>
+    </footer>
+
+  </div>
+</body>
+</html>

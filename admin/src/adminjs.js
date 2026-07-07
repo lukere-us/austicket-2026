@@ -3,7 +3,7 @@ import { fileURLToPath } from 'url'
 import { AdminJS, ComponentLoader } from 'adminjs'
 import NewAction from '../node_modules/adminjs/lib/backend/actions/new/new-action.js'
 import EditAction from '../node_modules/adminjs/lib/backend/actions/edit/edit-action.js'
-import Adapter, { Database, Resource } from '@adminjs/sql'
+import { Adapter, Database, Resource } from '@adminjs/sql'
 import { dbPool, getDbConfig } from './db.js'
 import { normalizeListingDatetime } from './components/listingDateUtils.js'
 import { fetchDailyAnalyticsSeries, fetchDashboardAnalytics } from './lib/dashboardAnalytics.js'
@@ -129,7 +129,7 @@ export async function buildAdminJs() {
 
   const cfg = getDbConfig()
   const databaseName = cfg.database
-  const db = await new Adapter('mysql', {
+  const db = await new Adapter('mysql2', {
     host: cfg.host,
     port: cfg.port,
     user: cfg.user,
