@@ -879,9 +879,22 @@ async function start() {
     res.status(500).send('Internal Server Error')
   })
 
-  app.listen(PORT, () => {
+  const server = app.listen(PORT)
+
+  server.on('listening', () => {
     // eslint-disable-next-line no-console
     console.log(`AdminJS running on http://localhost:${PORT}${adminJs.options.rootPath}`)
+  })
+
+  server.on('error', (err) => {
+    if (err?.code === 'EADDRINUSE') {
+      // eslint-disable-next-line no-console
+      console.error(
+        `Port ${PORT} is already in use (often Next.js on 3001). Set PORT=3003 in admin/.env and restart.`,
+      )
+      process.exit(1)
+    }
+    throw err
   })
 }
 
