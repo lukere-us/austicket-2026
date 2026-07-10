@@ -937,6 +937,7 @@ export async function buildAdminJs() {
 
   componentLoader.override('SidebarPages', path.join(__dirname, 'components', 'SidebarPages.jsx'))
   componentLoader.override('SidebarBranding', path.join(__dirname, 'components', 'AdminSidebarBranding.jsx'))
+  componentLoader.override('Login', path.join(__dirname, 'components', 'AdminLogin.jsx'))
 
   let brandLogo = null
   try {
@@ -951,6 +952,7 @@ export async function buildAdminJs() {
       companyName: 'AUS Ticket Lanka',
       ...(brandLogo ? { logo: brandLogo } : {}),
       softwareBrothers: false,
+      withMadeWithLove: false,
     },
     locale: {
       language: 'en',

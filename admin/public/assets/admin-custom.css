@@ -80,11 +80,35 @@
 }
 
 .login__Wrapper img {
-  max-width: 170px;
-  max-height: 60px;
+  max-width: 200px;
+  max-height: 70px !important;
   width: auto;
   height: auto;
   object-fit: contain;
+}
+
+/* Center login card and hide the blue Welcome / illustration column */
+.login__Wrapper {
+  min-height: 100vh;
+}
+
+.login__Wrapper > div {
+  height: auto !important;
+  max-width: 480px;
+  width: 100% !important;
+}
+
+.login__Wrapper > div > div:first-child:not(form) {
+  display: none !important;
+  width: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+}
+
+.login__Wrapper form {
+  width: 100% !important;
+  max-width: 480px;
 }
 [data-css="sidebar"] nav a[href*="/pages/sliderBanner"]::before { content: 'slideshow'; }
 [data-css="sidebar"] nav a[href*="/pages/homeListings"]::before { content: 'view_list'; }
