@@ -95,7 +95,7 @@ export const ADMIN_HELP_HTML = `
       <li><strong>Default site name</strong> — fallback brand name in the header.</li>
       <li><strong>Australia / New Zealand site name</strong> — optional per-country override.</li>
       <li><strong>Tagline</strong> — supports <code>{location}</code>.</li>
-      <li><strong>Logos</strong> — upload separate SVG/PNG logos for AU and NZ; shown based on visitor country.</li>
+      <li><strong>Logos & titles</strong> — each country from Locations gets its own logo and site name in Header settings. Add a country (with a code like LK), then set its branding under Pages → Header.</li>
       <li><strong>Navigation links</strong> — optional header links (e.g. Blog → <code>/blogs</code>).</li>
       <li><strong>Visibility</strong> — toggle search, country selector, theme toggle, login/register buttons.</li>
     </ul>
@@ -108,6 +108,7 @@ export const ADMIN_HELP_HTML = `
     <ul>
       <li>Upload partner logos (SVG, PNG, JPEG).</li>
       <li>Set scroll speed, gap, max logo height (default 100px), pause on hover.</li>
+      <li><strong>Loading sequence</strong> — Random, Ascending (list order), or Descending.</li>
       <li>Optional name and link URL per logo.</li>
     </ul>
   </section>

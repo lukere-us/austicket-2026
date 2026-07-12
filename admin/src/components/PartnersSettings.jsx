@@ -143,15 +143,18 @@ export default function PartnersSettings() {
 
   const formRef = useRef(null)
   const [settings, setSettings] = useState(() => defaultPartnersSettings())
-  const [fields] = useState(() => partnersSettingFields())
+  const [fields, setFields] = useState(() => partnersSettingFields())
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [formKey, setFormKey] = useState(0)
   const fetchStartedRef = useRef(false)
 
-  const applySettings = (next) => {
+  const applySettings = (next, nextFields) => {
     const merged = mergePartnersSettings(next)
     setSettings(merged)
+    if (Array.isArray(nextFields) && nextFields.length) {
+      setFields(nextFields)
+    }
     setFormKey((k) => k + 1)
   }
 
@@ -171,7 +174,7 @@ export default function PartnersSettings() {
         if (!res.ok) throw new Error(`Failed to load settings (${res.status})`)
         const data = await res.json()
         if (!alive) return
-        if (data?.settings) applySettings(data.settings)
+        applySettings(data?.settings || {}, data?.fields)
       } catch (e) {
         if (!alive) return
         sendNoticeRef.current({ type: 'error', message: e?.message || String(e) })
@@ -212,7 +215,7 @@ export default function PartnersSettings() {
       })
       if (!res.ok) throw new Error(`Failed to save settings (${res.status})`)
       const data = await res.json()
-      if (data?.settings) applySettings(data.settings)
+      applySettings(data?.settings || payload, data?.fields)
 
       const notice = data?.notice
       if (notice) sendNotice(notice)
@@ -237,7 +240,7 @@ export default function PartnersSettings() {
       <H2>Partners slider</H2>
       <Text variant="sm" color="grey60" mt="sm" mb="xl">
         Manage the &quot;Our partners&quot; logo carousel on the homepage. Upload partner logos and adjust
-        scroll speed, spacing, and display options.
+        scroll speed, spacing, loading sequence, and display options.
       </Text>
 
       <form ref={formRef} key={formKey} onSubmit={(e) => e.preventDefault()}>

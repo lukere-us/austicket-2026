@@ -155,10 +155,33 @@ function read_user_agent(): ?string
 
 function normalize_country_name(?string $raw): ?string
 {
-  $c = strtoupper(trim((string)$raw));
+  $rawTrim = trim((string)$raw);
+  $c = strtoupper($rawTrim);
   if ($c === '') return null;
+
+  // Built-in shortcuts (kept for speed / older clients)
   if (in_array($c, ['AU', 'AUS', 'AUSTRALIA', '1'], true)) return 'Australia';
   if (in_array($c, ['NZ', 'NZL', 'NEW ZEALAND', '2'], true)) return 'New Zealand';
+
+  try {
+    $pdo = db();
+    $byCode = $pdo->prepare('SELECT name FROM countries WHERE UPPER(TRIM(code)) = ? LIMIT 1');
+    $byCode->execute([$c]);
+    $row = $byCode->fetch(PDO::FETCH_ASSOC);
+    if ($row && !empty($row['name'])) {
+      return (string)$row['name'];
+    }
+
+    $byName = $pdo->prepare('SELECT name FROM countries WHERE LOWER(TRIM(name)) = LOWER(?) LIMIT 1');
+    $byName->execute([$rawTrim]);
+    $row = $byName->fetch(PDO::FETCH_ASSOC);
+    if ($row && !empty($row['name'])) {
+      return (string)$row['name'];
+    }
+  } catch (Throwable) {
+    // DB unavailable — fall through
+  }
+
   return null;
 }
 
@@ -529,6 +552,48 @@ if ($method === 'GET' && $path === '/') {
 // Public: uploaded listing/gallery images from /Upload
 if ($method === 'GET' && preg_match('#^/media/(.+)$#', $path, $m)) {
   serve_upload_file($m[1]);
+}
+
+// Public: countries available for the country selector
+if ($method === 'GET' && $path === '/countries') {
+  header('Cache-Control: no-store, no-cache, must-revalidate');
+  header('Pragma: no-cache');
+  $pdo = db();
+  try {
+    $stmt = $pdo->query("
+      SELECT id, name, code, flag_image_path
+      FROM countries
+      WHERE code IS NOT NULL AND TRIM(code) <> ''
+      ORDER BY name ASC
+    ");
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+  } catch (Throwable) {
+    $rows = [];
+  }
+
+  $items = [];
+  foreach ($rows as $row) {
+    $code = strtoupper(trim((string)($row['code'] ?? '')));
+    $name = trim((string)($row['name'] ?? ''));
+    if ($code === '' || $name === '') continue;
+    $items[] = [
+      'id' => (int)$row['id'],
+      'code' => $code,
+      'name' => $name,
+      'badge' => $code === 'AU' ? 'AUS' : $code,
+      'flag_image_path' => $row['flag_image_path'] ?? null,
+    ];
+  }
+
+  // Ensure AU/NZ remain available even if the table is empty during setup
+  if (!$items) {
+    $items = [
+      ['id' => 0, 'code' => 'AU', 'name' => 'Australia', 'badge' => 'AUS', 'flag_image_path' => null],
+      ['id' => 0, 'code' => 'NZ', 'name' => 'New Zealand', 'badge' => 'NZ', 'flag_image_path' => null],
+    ];
+  }
+
+  json_response(['items' => $items]);
 }
 
 // Public: cities with published listings (optionally scoped to country)

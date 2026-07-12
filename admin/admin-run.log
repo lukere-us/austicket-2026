@@ -1,0 +1,6 @@
+◇ injected env (6) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+◇ injected env (0) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
+AdminJS: bundling user components...
+AdminJS running on http://localhost:3003/admin
+GET /admin/login -> 200 (8ms)
+^C

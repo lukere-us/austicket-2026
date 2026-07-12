@@ -54,7 +54,13 @@ export default function AdminSidebarBranding(props) {
         if (!res.ok) return
         const data = await res.json()
         if (!alive) return
-        const next = uploadPathToAdminUrl(data?.settings?.logoAuUrl || data?.settings?.logoNzUrl)
+        const next = uploadPathToAdminUrl(
+          data?.settings?.countryBranding?.AU?.logoUrl ||
+            data?.settings?.logoAuUrl ||
+            data?.settings?.countryBranding?.NZ?.logoUrl ||
+            data?.settings?.logoNzUrl ||
+            Object.values(data?.settings?.countryBranding || {}).find((e) => e?.logoUrl)?.logoUrl,
+        )
         if (next) setLogo(next)
       } catch {
         // keep startup branding logo

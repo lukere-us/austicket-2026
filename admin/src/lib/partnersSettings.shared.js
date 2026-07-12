@@ -8,8 +8,15 @@ const DEFAULTS = {
   logoMaxHeight: 100,
   gapPx: 48,
   showDecorLines: true,
+  loadSequence: 'ascending',
   logos: [],
 }
+
+export const LOAD_SEQUENCE_OPTIONS = [
+  { value: 'random', label: 'Random' },
+  { value: 'ascending', label: 'Ascending' },
+  { value: 'descending', label: 'Descending' },
+]
 
 export const FIELD_GROUPS = [
   {
@@ -25,6 +32,13 @@ export const FIELD_GROUPS = [
     id: 'slider',
     label: 'Slider animation',
     fields: [
+      {
+        key: 'loadSequence',
+        label: 'Loading sequence',
+        type: 'select',
+        options: LOAD_SEQUENCE_OPTIONS,
+        help: 'Order logos appear in the slider. Ascending uses the list order below; descending reverses it; random shuffles on each page load.',
+      },
       {
         key: 'speedSeconds',
         label: 'Full scroll duration (seconds)',
@@ -83,6 +97,11 @@ function clampNumber(value, min, max, fallback) {
 
 function coerceValue(field, raw, fallback) {
   if (field.type === 'boolean') return clampBool(raw, fallback)
+  if (field.type === 'select') {
+    const allowed = (field.options || []).map((o) => String(o.value))
+    const s = String(raw ?? '').trim().toLowerCase()
+    return allowed.includes(s) ? s : fallback
+  }
   if (field.type === 'text') {
     const s = String(raw ?? '').trim()
     return s || fallback

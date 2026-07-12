@@ -2,13 +2,21 @@
 export function normalizeListingDatetime(value) {
   if (value == null || value === '') return ''
 
+  // Broken serialization (e.g. Date walked into {}) must not become "[object Object]".
+  if (typeof value === 'object' && !(value instanceof Date) && !Array.isArray(value)) {
+    if (Object.keys(value).length === 0) return ''
+  }
+
   if (value instanceof Date) {
     if (Number.isNaN(value.getTime())) return ''
-    return value.toISOString().slice(0, 19).replace('T', ' ')
+    const y = value.getFullYear()
+    const m = String(value.getMonth() + 1).padStart(2, '0')
+    const d = String(value.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d} 00:00:00`
   }
 
   const raw = String(value).trim()
-  if (!raw) return ''
+  if (!raw || raw === '[object Object]') return ''
 
   if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/.test(raw)) return raw
 

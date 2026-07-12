@@ -6,12 +6,15 @@ const DEFAULT_NAV_LINKS = [
 
 const DEFAULTS = {
   siteName: 'AUS Ticket Lanka',
+  // Legacy AU/NZ fields kept for older saved settings / admin login branding.
   siteNameAu: '',
   siteNameNz: '',
   taglineTemplate: "What's on across {location}",
   homeUrl: '/',
   logoAuUrl: '',
   logoNzUrl: '',
+  /** @type {Record<string, { siteName: string, logoUrl: string }>} */
+  countryBranding: {},
   useCountryBadge: true,
   customBadgeText: 'AUS',
   showSearch: true,
@@ -32,19 +35,7 @@ export const FIELD_GROUPS = [
         key: 'siteName',
         label: 'Default site name',
         type: 'text',
-        help: 'Used when no country-specific site name is set.',
-      },
-      {
-        key: 'siteNameAu',
-        label: 'Australia site name',
-        type: 'text',
-        help: 'Shown in the header when visitors select Australia. Leave blank to use the default.',
-      },
-      {
-        key: 'siteNameNz',
-        label: 'New Zealand site name',
-        type: 'text',
-        help: 'Shown in the header when visitors select New Zealand. Leave blank to use the default.',
+        help: 'Used when a country has no site name of its own.',
       },
       {
         key: 'taglineTemplate',
@@ -53,7 +44,11 @@ export const FIELD_GROUPS = [
         help: 'Use {location} for the selected country name. Hidden on very small screens.',
       },
       { key: 'homeUrl', label: 'Home link URL', type: 'text' },
-      { key: 'useCountryBadge', label: 'Use country code in badge when no logo (AU / NZ)', type: 'boolean' },
+      {
+        key: 'useCountryBadge',
+        label: 'Use country code in badge when no logo',
+        type: 'boolean',
+      },
       {
         key: 'customBadgeText',
         label: 'Custom badge text',
@@ -93,8 +88,75 @@ function cloneNavLinks(items) {
     .filter((item) => item.label && item.url)
 }
 
-function cloneLogoUrl(raw) {
+function cloneText(raw) {
   return typeof raw === 'string' ? raw.trim() : ''
+}
+
+function normalizeCountryCode(raw) {
+  return String(raw ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 10)
+}
+
+/**
+ * @param {unknown} input
+ * @returns {Record<string, { siteName: string, logoUrl: string }>}
+ */
+export function cloneCountryBranding(input) {
+  const out = {}
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return out
+
+  for (const [rawCode, rawEntry] of Object.entries(input)) {
+    const code = normalizeCountryCode(rawCode)
+    if (!code) continue
+    const entry = rawEntry && typeof rawEntry === 'object' && !Array.isArray(rawEntry) ? rawEntry : {}
+    out[code] = {
+      siteName: cloneText(entry.siteName),
+      logoUrl: cloneText(entry.logoUrl),
+    }
+  }
+  return out
+}
+
+function seedCountryBrandingFromLegacy(branding, input) {
+  const out = { ...branding }
+  const logoAu = cloneText(input?.logoAuUrl)
+  const logoNz = cloneText(input?.logoNzUrl)
+  const nameAu = cloneText(input?.siteNameAu)
+  const nameNz = cloneText(input?.siteNameNz)
+
+  if (logoAu || nameAu) {
+    out.AU = {
+      siteName: out.AU?.siteName || nameAu,
+      logoUrl: out.AU?.logoUrl || logoAu,
+    }
+  }
+  if (logoNz || nameNz) {
+    out.NZ = {
+      siteName: out.NZ?.siteName || nameNz,
+      logoUrl: out.NZ?.logoUrl || logoNz,
+    }
+  }
+
+  const legacyLogo = cloneText(input?.logoImageUrl)
+  if (legacyLogo) {
+    if (!out.AU) out.AU = { siteName: '', logoUrl: '' }
+    if (!out.NZ) out.NZ = { siteName: '', logoUrl: '' }
+    if (!out.AU.logoUrl) out.AU.logoUrl = legacyLogo
+    if (!out.NZ.logoUrl) out.NZ.logoUrl = legacyLogo
+  }
+
+  return out
+}
+
+function syncLegacyFromCountryBranding(out) {
+  out.logoAuUrl = out.countryBranding?.AU?.logoUrl || ''
+  out.logoNzUrl = out.countryBranding?.NZ?.logoUrl || ''
+  out.siteNameAu = out.countryBranding?.AU?.siteName || ''
+  out.siteNameNz = out.countryBranding?.NZ?.siteName || ''
+  return out
 }
 
 function clampBool(raw, fallback) {
@@ -116,12 +178,33 @@ function coerceValue(field, raw, fallback) {
 export function defaultHeaderSettings() {
   return {
     ...DEFAULTS,
+    countryBranding: {},
     navLinks: DEFAULT_NAV_LINKS.map((item) => ({ ...item })),
   }
 }
 
 export function headerSettingFields() {
   return FIELD_GROUPS
+}
+
+export function getCountryBrandingEntry(settings, countryCode) {
+  const code = normalizeCountryCode(countryCode)
+  if (!code) return { siteName: '', logoUrl: '' }
+  const entry = settings?.countryBranding?.[code]
+  if (entry && typeof entry === 'object') {
+    return {
+      siteName: cloneText(entry.siteName),
+      logoUrl: cloneText(entry.logoUrl),
+    }
+  }
+  // Legacy fallback
+  if (code === 'AU') {
+    return { siteName: cloneText(settings?.siteNameAu), logoUrl: cloneText(settings?.logoAuUrl) }
+  }
+  if (code === 'NZ') {
+    return { siteName: cloneText(settings?.siteNameNz), logoUrl: cloneText(settings?.logoNzUrl) }
+  }
+  return { siteName: '', logoUrl: '' }
 }
 
 export function mergeHeaderSettings(input) {
@@ -132,10 +215,17 @@ export function mergeHeaderSettings(input) {
     for (const field of group.fields) fieldByKey.set(field.key, field)
   }
 
+  const skip = new Set([
+    'navLinks',
+    'countryBranding',
+    'logoAuUrl',
+    'logoNzUrl',
+    'siteNameAu',
+    'siteNameNz',
+  ])
+
   for (const key of Object.keys(base)) {
-    if (key === 'navLinks' || key === 'logoAuUrl' || key === 'logoNzUrl' || key === 'siteNameAu' || key === 'siteNameNz') {
-      continue
-    }
+    if (skip.has(key)) continue
     if (input && Object.prototype.hasOwnProperty.call(input, key)) {
       const field = fieldByKey.get(key)
       out[key] = field ? coerceValue(field, input[key], base[key]) : input[key]
@@ -146,25 +236,12 @@ export function mergeHeaderSettings(input) {
     out.navLinks = cloneNavLinks(input.navLinks)
   }
 
-  if (input && Object.prototype.hasOwnProperty.call(input, 'logoAuUrl')) {
-    out.logoAuUrl = cloneLogoUrl(input.logoAuUrl)
+  let branding = {}
+  if (input && Object.prototype.hasOwnProperty.call(input, 'countryBranding')) {
+    branding = cloneCountryBranding(input.countryBranding)
   }
-  if (input && Object.prototype.hasOwnProperty.call(input, 'logoNzUrl')) {
-    out.logoNzUrl = cloneLogoUrl(input.logoNzUrl)
-  }
-  if (input && Object.prototype.hasOwnProperty.call(input, 'siteNameAu')) {
-    out.siteNameAu = cloneLogoUrl(input.siteNameAu)
-  }
-  if (input && Object.prototype.hasOwnProperty.call(input, 'siteNameNz')) {
-    out.siteNameNz = cloneLogoUrl(input.siteNameNz)
-  }
+  branding = seedCountryBrandingFromLegacy(branding, input || {})
+  out.countryBranding = branding
 
-  // Legacy single logo field
-  if (input?.logoImageUrl && !out.logoAuUrl && !out.logoNzUrl) {
-    const legacy = cloneLogoUrl(input.logoImageUrl)
-    out.logoAuUrl = legacy
-    out.logoNzUrl = legacy
-  }
-
-  return out
+  return syncLegacyFromCountryBranding(out)
 }

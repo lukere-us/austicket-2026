@@ -530,6 +530,18 @@ export async function buildAdminJs() {
   /** Express / JSON.stringify cannot serialize BigInt; mysql2 may surface BIGINT values as bigint. */
   function stripBigIntDeep(value) {
     if (typeof value === 'bigint') return value.toString()
+    // Date is typeof 'object' — never walk it with Object.entries (that becomes {}).
+    if (value instanceof Date) {
+      if (Number.isNaN(value.getTime())) return null
+      const y = value.getFullYear()
+      const m = String(value.getMonth() + 1).padStart(2, '0')
+      const d = String(value.getDate()).padStart(2, '0')
+      const hh = String(value.getHours()).padStart(2, '0')
+      const mm = String(value.getMinutes()).padStart(2, '0')
+      const ss = String(value.getSeconds()).padStart(2, '0')
+      return `${y}-${m}-${d} ${hh}:${mm}:${ss}`
+    }
+    if (Buffer.isBuffer?.(value)) return value.toString('utf8')
     if (Array.isArray(value)) return value.map(stripBigIntDeep)
     if (value && typeof value === 'object') {
       const out = {}
@@ -1171,6 +1183,7 @@ export async function buildAdminJs() {
           navigation: { name: 'Content', icon: 'Movie' },
           sort: { sortBy: 'created_at', direction: 'desc' },
           listProperties: ['banner_image', 'title', 'slug', 'type_id', 'status', 'publish_at', 'unpublish_at'],
+          filterProperties: ['title', 'slug', 'type_id', 'status', 'is_featured', 'publish_at', 'unpublish_at'],
           properties: {
             created_at: { isVisible: false },
             updated_at: { isVisible: false },
@@ -1178,9 +1191,15 @@ export async function buildAdminJs() {
             updated_by_admin_id: { isVisible: false, reference: 'admins' },
             type_id: { reference: 'types' },
             title: {
+              isTitle: true,
               components: { edit: Components.ListingTitleLarge },
             },
             status: {
+              availableValues: [
+                { value: 'draft', label: 'Draft' },
+                { value: 'published', label: 'Published' },
+                { value: 'unpublished', label: 'Unpublished' },
+              ],
               components: {
                 list: Components.ListingStatusBadge,
                 show: Components.ListingStatusBadge,
@@ -1233,6 +1252,10 @@ export async function buildAdminJs() {
                 return request
               },
               after: async (response, request, context) => {
+                // AdminJS runs `after` on GET too — only persist related rows on save.
+                if (String(request?.method || '').toLowerCase() !== 'post') {
+                  return stripBigIntDeep(response)
+                }
                 return completeListingAfterSave(response, request, context, { isNew: true })
               },
             },
@@ -1246,6 +1269,9 @@ export async function buildAdminJs() {
                 return request
               },
               after: async (response, request, context) => {
+                if (String(request?.method || '').toLowerCase() !== 'post') {
+                  return stripBigIntDeep(response)
+                }
                 return completeListingAfterSave(response, request, context, { isNew: false })
               },
             },

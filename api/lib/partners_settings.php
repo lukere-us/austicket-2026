@@ -14,6 +14,7 @@ function partners_default_settings(): array
     'logoMaxHeight' => 100,
     'gapPx' => 48,
     'showDecorLines' => true,
+    'loadSequence' => 'ascending',
     'logos' => [],
   ];
 }
@@ -49,6 +50,7 @@ function partners_merge_settings(array $input): array
     'logoMaxHeight' => ['num', 32, 120],
     'gapPx' => ['num', 16, 120],
     'showDecorLines' => 'bool',
+    'loadSequence' => ['enum', ['random', 'ascending', 'descending']],
   ];
 
   foreach ($rules as $key => $rule) {
@@ -63,6 +65,12 @@ function partners_merge_settings(array $input): array
     if ($rule === 'text') {
       $s = trim((string)$raw);
       $out[$key] = $s !== '' ? $s : $fallback;
+      continue;
+    }
+    if (is_array($rule) && ($rule[0] ?? '') === 'enum') {
+      $s = strtolower(trim((string)$raw));
+      $allowed = $rule[1] ?? [];
+      $out[$key] = in_array($s, $allowed, true) ? $s : $fallback;
       continue;
     }
     if (is_array($rule) && ($rule[0] ?? '') === 'num') {

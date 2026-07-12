@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { useNotice } from 'adminjs'
+import { ApiClient, useNotice } from 'adminjs'
 import { Box, Button, H2, H4, Loader, Text } from '@adminjs/design-system'
 import FormSaveChrome from './FormSaveChrome.jsx'
 import { HeaderLogoUpload } from './HeaderLogoUpload.jsx'
@@ -92,14 +92,89 @@ function NavLinkRowsEditor({ rows, onChange }) {
   )
 }
 
+function CountryBrandingEditor({ countries, branding, onChange }) {
+  const updateCountry = (code, patch) => {
+    const next = {
+      ...(branding || {}),
+      [code]: {
+        siteName: branding?.[code]?.siteName || '',
+        logoUrl: branding?.[code]?.logoUrl || '',
+        ...patch,
+      },
+    }
+    onChange(next)
+  }
+
+  if (!countries.length) {
+    return (
+      <Box mb="xl" p="md" borderRadius="lg" style={{ border: '1px dashed #d4d4d8', background: '#fafafa' }}>
+        <Text variant="sm" color="grey60">
+          No countries found. Add countries under Locations → Countries (each needs a short code like AU, NZ,
+          LK), then return here to set logo and title per country.
+        </Text>
+      </Box>
+    )
+  }
+
+  return (
+    <Box mb="xl">
+      <H4 mb="md">Per-country logo & title</H4>
+      <Text variant="sm" color="grey60" mb="lg">
+        Each country you add in Locations gets its own header logo and site name. Leave blank to use the
+        default site name / badge.
+      </Text>
+      {countries.map((country) => {
+        const code = country.code
+        const entry = branding?.[code] || { siteName: '', logoUrl: '' }
+        return (
+          <Box
+            key={code}
+            mb="lg"
+            p="lg"
+            borderRadius="lg"
+            style={{ border: '1px solid #e4e4e7', background: '#fff' }}
+          >
+            <Text fontWeight="bold" mb="sm">
+              {country.name}{' '}
+              <Text as="span" variant="sm" color="grey60">
+                ({code})
+              </Text>
+            </Text>
+            <Box mb="md">
+              <Text variant="sm" mb="sm">
+                Site name for {country.name}
+              </Text>
+              <input
+                style={rowInputStyle}
+                value={entry.siteName || ''}
+                placeholder={`Leave blank to use default site name`}
+                onChange={(e) => updateCountry(code, { siteName: e.target.value })}
+              />
+            </Box>
+            <HeaderLogoUpload
+              label={`${country.name} logo (SVG or image)`}
+              help={`Shown when visitors select ${country.name}. SVG recommended.`}
+              value={entry.logoUrl || ''}
+              onChange={(logoUrl) => updateCountry(code, { logoUrl })}
+            />
+          </Box>
+        )
+      })}
+    </Box>
+  )
+}
+
 export default function HeaderSettings() {
   const sendNotice = useNotice()
   const sendNoticeRef = useRef(sendNotice)
   sendNoticeRef.current = sendNotice
+  const apiRef = useRef(null)
+  if (!apiRef.current) apiRef.current = new ApiClient()
 
   const formRef = useRef(null)
   const [settings, setSettings] = useState(() => defaultHeaderSettings())
   const [fields] = useState(() => headerSettingFields())
+  const [countries, setCountries] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [formKey, setFormKey] = useState(0)
@@ -119,15 +194,38 @@ export default function HeaderSettings() {
 
     const run = async () => {
       try {
-        const res = await fetch('/admin/api/settings/header', {
-          credentials: 'include',
-          cache: 'no-store',
-          headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
-        })
-        if (!res.ok) throw new Error(`Failed to load settings (${res.status})`)
-        const data = await res.json()
+        const [settingsRes, countriesRes] = await Promise.all([
+          fetch('/admin/api/settings/header', {
+            credentials: 'include',
+            cache: 'no-store',
+            headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+          }),
+          apiRef.current.resourceAction({
+            resourceId: 'countries',
+            actionName: 'list',
+            params: { perPage: 500, sortBy: 'name', direction: 'asc' },
+          }),
+        ])
+
+        if (!settingsRes.ok) throw new Error(`Failed to load settings (${settingsRes.status})`)
+        const data = await settingsRes.json()
         if (!alive) return
         if (data?.settings) applySettings(data.settings)
+
+        const records = Array.isArray(countriesRes?.data?.records) ? countriesRes.data.records : []
+        const list = records
+          .map((rec) => {
+            const params = rec?.params || {}
+            const code = String(params.code || '')
+              .trim()
+              .toUpperCase()
+            const name = String(params.name || '').trim()
+            if (!code || !name) return null
+            return { id: params.id, code, name }
+          })
+          .filter(Boolean)
+          .sort((a, b) => a.name.localeCompare(b.name))
+        if (alive) setCountries(list)
       } catch (e) {
         if (!alive) return
         sendNoticeRef.current({ type: 'error', message: e?.message || String(e) })
@@ -153,8 +251,7 @@ export default function HeaderSettings() {
       const payload = mergeHeaderSettings({
         ...scalar,
         navLinks: settings.navLinks,
-        logoAuUrl: settings.logoAuUrl,
-        logoNzUrl: settings.logoNzUrl,
+        countryBranding: settings.countryBranding,
       })
 
       const res = await fetch('/admin/api/settings/header', {
@@ -194,8 +291,8 @@ export default function HeaderSettings() {
     <Box variant="white" p="xxl">
       <H2>Header settings</H2>
       <Text variant="sm" color="grey60" mt="sm" mb="xl">
-        Customize the site header: brand name, tagline, logo, navigation links, and which controls are
-        visible.
+        Customize the site header: default brand name, tagline, per-country logos and titles, navigation
+        links, and which controls are visible.
       </Text>
 
       <FormSaveChrome onSave={onSave} saving={saving} saveLabel="Save header" savingLabel="Saving…">
@@ -213,20 +310,11 @@ export default function HeaderSettings() {
               ))}
 
               {group.id === 'brand' ? (
-                <>
-                  <HeaderLogoUpload
-                    label="Australia logo (SVG or image)"
-                    help="Shown when visitors select Australia. SVG recommended."
-                    value={settings.logoAuUrl || ''}
-                    onChange={(logoAuUrl) => setSettings((prev) => ({ ...prev, logoAuUrl }))}
-                  />
-                  <HeaderLogoUpload
-                    label="New Zealand logo (SVG or image)"
-                    help="Shown when visitors select New Zealand. SVG recommended."
-                    value={settings.logoNzUrl || ''}
-                    onChange={(logoNzUrl) => setSettings((prev) => ({ ...prev, logoNzUrl }))}
-                  />
-                </>
+                <CountryBrandingEditor
+                  countries={countries}
+                  branding={settings.countryBranding || {}}
+                  onChange={(countryBranding) => setSettings((prev) => ({ ...prev, countryBranding }))}
+                />
               ) : null}
 
               {group.id === 'auth' ? (
