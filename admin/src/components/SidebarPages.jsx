@@ -14,6 +14,7 @@ const PAGE_ICONS = {
   footer: 'Menu',
   header: 'Settings',
   partners: 'Image',
+  ads: 'Campaign',
   youtubeCarousel: 'Video',
   help: 'Help',
 }

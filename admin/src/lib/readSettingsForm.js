@@ -3,6 +3,7 @@ import { mergeHomeListingsSettings } from './homeListingsSettings.shared.js'
 import { mergeFooterSettings } from './footerSettings.shared.js'
 import { mergeHeaderSettings } from './headerSettings.shared.js'
 import { mergePartnersSettings } from './partnersSettings.shared.js'
+import { mergeAdsSettings } from './adsSettings.shared.js'
 import { mergeYoutubeCarouselSettings } from './youtubeCarouselSettings.shared.js'
 
 function readFieldValue(field, el) {
@@ -62,6 +63,10 @@ export function readHeaderFormValues(formEl, fieldGroups) {
 
 export function readPartnersFormValues(formEl, fieldGroups) {
   return readSettingsFormValues(formEl, fieldGroups, mergePartnersSettings)
+}
+
+export function readAdsFormValues(formEl, fieldGroups) {
+  return readSettingsFormValues(formEl, fieldGroups, mergeAdsSettings)
 }
 
 export function readYoutubeCarouselFormValues(formEl, fieldGroups) {

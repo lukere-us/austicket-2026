@@ -11,6 +11,7 @@ require_once __DIR__ . '/lib/home_listings_settings.php';
 require_once __DIR__ . '/lib/footer_settings.php';
 require_once __DIR__ . '/lib/header_settings.php';
 require_once __DIR__ . '/lib/partners_settings.php';
+require_once __DIR__ . '/lib/ads_settings.php';
 require_once __DIR__ . '/lib/youtube_carousel_settings.php';
 require_once __DIR__ . '/lib/blogs.php';
 require_once __DIR__ . '/lib/home_hero_stats.php';
@@ -1339,6 +1340,13 @@ if ($method === 'GET' && $path === '/settings/partners') {
   header('Pragma: no-cache');
   $pdo = db();
   json_response(['settings' => load_partners_settings($pdo)]);
+}
+
+if ($method === 'GET' && $path === '/settings/ads') {
+  header('Cache-Control: no-store, no-cache, must-revalidate');
+  header('Pragma: no-cache');
+  $pdo = db();
+  json_response(['settings' => load_ads_settings($pdo)]);
 }
 
 if ($method === 'GET' && $path === '/settings/youtube-carousel') {

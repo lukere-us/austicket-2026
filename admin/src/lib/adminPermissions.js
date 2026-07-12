@@ -106,6 +106,8 @@ export function canAccessSiteSettingsSection(admin, sectionId) {
       return canAny(admin, ['pages.header', 'pages.homeListings', 'pages.sliderBanner'])
     case 'partners':
       return canAny(admin, ['pages.partners', 'pages.homeListings', 'pages.sliderBanner'])
+    case 'ads':
+      return canAny(admin, ['pages.ads', 'pages.homeListings', 'pages.sliderBanner'])
     case 'youtubeCarousel':
       return canAny(admin, ['pages.youtubeCarousel', 'pages.homeListings', 'pages.sliderBanner'])
     default:

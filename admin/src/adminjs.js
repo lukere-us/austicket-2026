@@ -107,6 +107,7 @@ export async function buildAdminJs() {
       'PartnersSettings',
       path.join(__dirname, 'components', 'PartnersSettings.jsx')
     ),
+    AdsSettings: componentLoader.add('AdsSettings', path.join(__dirname, 'components', 'AdsSettings.jsx')),
     YoutubeCarouselSettings: componentLoader.add(
       'YoutubeCarouselSettings',
       path.join(__dirname, 'components', 'YoutubeCarouselSettings.jsx')
@@ -982,6 +983,7 @@ export async function buildAdminJs() {
             footer: 'Footer settings',
             header: 'Header settings',
             partners: 'Partners slider',
+            ads: 'Ads',
             youtubeCarousel: 'YouTube carousel',
             help: 'Help',
           },
@@ -1049,6 +1051,12 @@ export async function buildAdminJs() {
         component: Components.PartnersSettings,
         isAccessible: ({ currentAdmin }) =>
           canAny(currentAdmin, ['pages.partners', 'pages.homeListings', 'pages.sliderBanner']),
+      },
+      ads: {
+        icon: 'Campaign',
+        component: Components.AdsSettings,
+        isAccessible: ({ currentAdmin }) =>
+          canAny(currentAdmin, ['pages.ads', 'pages.homeListings', 'pages.sliderBanner']),
       },
       youtubeCarousel: {
         icon: 'Video',

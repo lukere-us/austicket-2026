@@ -4,5 +4,6 @@ export const SITE_SETTINGS_SECTIONS = [
   { id: 'footer', label: 'Footer settings' },
   { id: 'header', label: 'Header settings' },
   { id: 'partners', label: 'Partners slider' },
+  { id: 'ads', label: 'Ads' },
   { id: 'youtubeCarousel', label: 'YouTube carousel' },
 ]

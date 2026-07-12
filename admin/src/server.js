@@ -45,6 +45,11 @@ import {
   savePartnersSettings,
 } from './lib/partnersSettings.js'
 import {
+  adsSettingFields,
+  loadAdsSettings,
+  saveAdsSettings,
+} from './lib/adsSettings.js'
+import {
   youtubeCarouselSettingFields,
   loadYoutubeCarouselSettings,
   saveYoutubeCarouselSettings,
@@ -468,6 +473,74 @@ async function start() {
     }
   )
 
+  // Upload endpoint for ad images
+  app.post(
+    `${adminJs.options.rootPath}/api/uploads/ad-image`,
+    sessionMiddleware,
+    requireUploadPermission,
+    formidableMiddleware({
+      multiples: false,
+      maxFileSize: 4 * 1024 * 1024,
+      uploadDir: os.tmpdir(),
+    }),
+    async (req, res) => {
+      try {
+        const file = req.files?.file ?? req.files?.image ?? req.files?.files ?? null
+        const f = Array.isArray(file) ? file[0] : file
+        if (!f) return res.status(400).json({ error: 'No file uploaded' })
+
+        const orig = String(f?.name || 'ad')
+        const extRaw = path.extname(orig).toLowerCase()
+        const type = String(f?.type || '')
+        const isSvg = type === 'image/svg+xml' || extRaw === '.svg'
+        const isJpeg =
+          type === 'image/jpeg' || type === 'image/jpg' || extRaw === '.jpg' || extRaw === '.jpeg'
+        const isPng = type === 'image/png' || extRaw === '.png'
+        const isWebp = type === 'image/webp' || extRaw === '.webp'
+        const isGif = type === 'image/gif' || extRaw === '.gif'
+        if (!isSvg && !isJpeg && !isPng && !isWebp && !isGif) {
+          return res.status(400).json({ error: 'Only SVG, PNG, JPEG, WebP, or GIF uploads are allowed' })
+        }
+        const size = Number(f?.size || 0)
+        if (size > 4 * 1024 * 1024) {
+          return res.status(400).json({ error: 'File must be <= 4MB' })
+        }
+
+        const adsDir = path.join(UPLOAD_DIR, 'ads')
+        await fs.mkdir(adsDir, { recursive: true })
+
+        const ext = isSvg
+          ? '.svg'
+          : isJpeg
+            ? extRaw === '.jpeg'
+              ? '.jpeg'
+              : '.jpg'
+            : isWebp
+              ? '.webp'
+              : isGif
+                ? '.gif'
+                : '.png'
+        const name = `ad_${Date.now()}_${Math.random().toString(16).slice(2)}${ext}`
+        const destAbs = path.join(adsDir, name)
+        const tmp = f?.path
+        if (!tmp) return res.status(400).json({ error: 'Invalid upload' })
+        await moveFile(tmp, destAbs)
+
+        res.json({
+          file: {
+            fileName: name,
+            publicUrl: `${adminJs.options.rootPath}/uploads-root/${encodeURIComponent(`ads/${name}`)}`,
+            storedPath: `Upload/ads/${name}`,
+          },
+        })
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('upload error', e)
+        res.status(500).json({ error: e?.message || String(e) })
+      }
+    }
+  )
+
   // Upload endpoint for country flags (single)
   app.post(
     `${adminJs.options.rootPath}/api/uploads/flag-image`,
@@ -757,6 +830,32 @@ async function start() {
         settings,
         fields: partnersSettingFields(),
         notice: { message: 'Partners settings saved.', type: 'success' },
+      })
+    } catch (e) {
+      res.status(500).json({ error: e?.message || String(e) })
+    }
+  })
+
+  settingsApi.get('/ads', requireAnyPermission('pages.ads', 'pages.homeListings', 'pages.sliderBanner'), async (_req, res) => {
+    try {
+      const pool = dbPool()
+      jsonNoCache(res, {
+        settings: await loadAdsSettings(pool),
+        fields: adsSettingFields(),
+      })
+    } catch (e) {
+      res.status(500).json({ error: e?.message || String(e) })
+    }
+  })
+
+  settingsApi.post('/ads', requireAnyPermission('pages.ads', 'pages.homeListings', 'pages.sliderBanner'), async (req, res) => {
+    try {
+      const pool = dbPool()
+      const settings = await saveAdsSettings(pool, parseSettingsBody(req))
+      jsonNoCache(res, {
+        settings,
+        fields: adsSettingFields(),
+        notice: { message: 'Ads settings saved.', type: 'success' },
       })
     } catch (e) {
       res.status(500).json({ error: e?.message || String(e) })
