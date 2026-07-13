@@ -15,6 +15,7 @@ import { buildAdminJs } from './adminjs.js'
 import { dbPool, getDbConfig } from './db.js'
 import { ensureShowTimesTable } from './lib/ensureShowTimesTable.js'
 import { ensureBlogsSchema } from './lib/ensureBlogsSchema.js'
+import { ensureListingsOrganizer } from './lib/ensureListingsOrganizer.js'
 import { ensurePageVisitsVisitedAt } from './lib/ensurePageVisitsVisitedAt.js'
 import { ensureMainAdminPermissions } from './lib/ensureMainAdminPermissions.js'
 import { waitForDatabase } from './lib/waitForDatabase.js'
@@ -147,6 +148,7 @@ async function start() {
   await waitForDatabase()
   await ensureShowTimesTable(dbPool())
   await ensureBlogsSchema(dbPool())
+  await ensureListingsOrganizer(dbPool())
   await ensurePageVisitsVisitedAt(dbPool())
   await ensureMainAdminPermissions(dbPool())
 

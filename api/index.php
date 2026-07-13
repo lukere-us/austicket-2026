@@ -849,8 +849,12 @@ if ($method === 'GET' && preg_match('#^/listings/([^/]+)$#', $path, $m)) {
   $stmt->execute([':id' => $listing['id']]);
   $ratingAgg = $stmt->fetch() ?: ['rating_count' => 0, 'rating_avg' => null];
 
+  $organizer = resolve_partner_organizer($pdo, $listing['organizer_partner_id'] ?? null);
+  unset($listing['organizer_partner_id']);
+
   json_response([
     'listing' => $listing,
+    'organizer' => $organizer,
     'casts' => $casts,
     'gallery' => $gallery,
     'shows' => $shows,

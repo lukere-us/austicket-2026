@@ -828,7 +828,7 @@ export async function buildAdminJs() {
       const [srcRows] = await conn.execute(
         `
           SELECT type_id, title, slug, description_html, banner_image, detail_banner_image, trailer_url,
-                 status, publish_at, unpublish_at
+                 organizer_partner_id, status, publish_at, unpublish_at
           FROM listings WHERE id = ?
         `,
         [sourceListingId]
@@ -845,9 +845,9 @@ export async function buildAdminJs() {
         `
           INSERT INTO listings
             (type_id, title, slug, description_html, banner_image, detail_banner_image, trailer_url,
-             status, publish_at, unpublish_at, created_by_admin_id, updated_by_admin_id,
+             organizer_partner_id, status, publish_at, unpublish_at, created_by_admin_id, updated_by_admin_id,
              created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         [
           src.type_id,
@@ -857,6 +857,7 @@ export async function buildAdminJs() {
           src.banner_image,
           src.detail_banner_image,
           src.trailer_url,
+          src.organizer_partner_id ?? null,
           src.status,
           src.publish_at,
           src.unpublish_at,
@@ -1217,6 +1218,11 @@ export async function buildAdminJs() {
               type: 'boolean',
               isRequired: false,
               props: { label: 'Featured item' },
+            },
+            organizer_partner_id: {
+              type: 'string',
+              isVisible: { list: false, filter: false, show: true, edit: true },
+              props: { label: 'Organizer (Partner)' },
             },
             publish_at: {
               type: 'datetime',

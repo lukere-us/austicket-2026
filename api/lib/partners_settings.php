@@ -103,3 +103,30 @@ function load_partners_settings(PDO $pdo): array
   }
   return partners_default_settings();
 }
+
+/** Resolve a Partners-slider logo by id for listing organizer display. */
+function resolve_partner_organizer(PDO $pdo, mixed $partnerId): ?array
+{
+  $id = trim((string)($partnerId ?? ''));
+  if ($id === '') return null;
+
+  $settings = load_partners_settings($pdo);
+  $logos = $settings['logos'] ?? [];
+  if (!is_array($logos)) return null;
+
+  foreach ($logos as $logo) {
+    if (!is_array($logo)) continue;
+    if (trim((string)($logo['id'] ?? '')) !== $id) continue;
+    $name = trim((string)($logo['name'] ?? ''));
+    $imageUrl = trim((string)($logo['imageUrl'] ?? ''));
+    if ($name === '' && $imageUrl === '') return null;
+    return [
+      'id' => $id,
+      'name' => $name !== '' ? $name : 'Organizer',
+      'imageUrl' => $imageUrl,
+      'linkUrl' => trim((string)($logo['linkUrl'] ?? '')),
+    ];
+  }
+
+  return null;
+}

@@ -513,6 +513,24 @@ function sanitizeListingFormParams(
 	) {
 		out.is_featured = false;
 	}
+	if (
+		out.organizer_partner_id ===
+			undefined ||
+		out.organizer_partner_id ===
+			null ||
+		String(
+			out.organizer_partner_id,
+		).trim() ===
+			""
+	) {
+		out.organizer_partner_id =
+			null;
+	} else {
+		out.organizer_partner_id =
+			String(
+				out.organizer_partner_id,
+			).trim();
+	}
 	return out;
 }
 
@@ -524,6 +542,7 @@ const LISTING_SAVE_KEYS = [
 	"banner_image",
 	"detail_banner_image",
 	"trailer_url",
+	"organizer_partner_id",
 	"status",
 	"is_featured",
 	"publish_at",
@@ -2255,6 +2274,13 @@ export default function ListingTabbedForm(
 		useState(
 			null,
 		);
+	const [
+		partnerOptions,
+		setPartnerOptions,
+	] =
+		useState(
+			[],
+		);
 
 	const isEdit =
 		action?.name ===
@@ -2421,6 +2447,8 @@ export default function ListingTabbedForm(
 					p.propertyPath !==
 						"trailer_url" &&
 					p.propertyPath !==
+						"organizer_partner_id" &&
+					p.propertyPath !==
 						"description_html" &&
 					p.propertyPath !==
 						"created_at" &&
@@ -2452,6 +2480,39 @@ export default function ListingTabbedForm(
 
 	useEffect(() => {
 		ensureQuillStylesheet();
+	}, []);
+
+	useEffect(() => {
+		let cancelled = false;
+		const run = async () => {
+			try {
+				const res = await fetch("/admin/api/settings/partners", {
+					credentials: "include",
+					cache: "no-store",
+				});
+				if (!res.ok) return;
+				const data = await res.json();
+				const logos = Array.isArray(data?.settings?.logos)
+					? data.settings.logos
+					: [];
+				if (cancelled) return;
+				setPartnerOptions(
+					logos
+						.filter((logo) => logo && String(logo.id || "").trim())
+						.map((logo) => ({
+							id: String(logo.id).trim(),
+							name: String(logo.name || "").trim() || String(logo.id).trim(),
+							enabled: logo.enabled !== false && logo.enabled !== 0 && logo.enabled !== "0",
+						})),
+				);
+			} catch {
+				if (!cancelled) setPartnerOptions([]);
+			}
+		};
+		void run();
+		return () => {
+			cancelled = true;
+		};
 	}, []);
 
 	useEffect(() => {
@@ -4457,6 +4518,40 @@ export default function ListingTabbedForm(
 							/>
 						),
 					)}
+
+					<Box mb="xl">
+						<Label mb="sm">Organizer (Partner)</Label>
+						<Text variant="sm" color="grey60" mb="md">
+							Partners from Site settings → Partners slider. Shown as “Organized by” on the listing detail page.
+						</Text>
+						<select
+							value={String(record?.params?.organizer_partner_id || "")}
+							onChange={(e) =>
+								handleListingFieldChange(
+									"organizer_partner_id",
+									e.target.value || null,
+								)
+							}
+							style={{
+								width: "100%",
+								maxWidth: 420,
+								boxSizing: "border-box",
+								padding: "10px 12px",
+								borderRadius: 8,
+								border: "1px solid #d4d4d8",
+								fontSize: 14,
+								background: "#fff",
+							}}
+						>
+							<option value="">— None —</option>
+							{partnerOptions.map((opt) => (
+								<option key={opt.id} value={opt.id}>
+									{opt.name}
+									{opt.enabled ? "" : " (disabled)"}
+								</option>
+							))}
+						</select>
+					</Box>
 
 					<Box
 						mt="xl"
