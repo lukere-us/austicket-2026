@@ -5,6 +5,8 @@ declare(strict_types=1);
 require_once __DIR__ . '/lib/http.php';
 require_once __DIR__ . '/lib/db.php';
 require_once __DIR__ . '/lib/jwt.php';
+require_once __DIR__ . '/lib/mail.php';
+require_once __DIR__ . '/lib/password_reset.php';
 require_once __DIR__ . '/lib/site_settings.php';
 require_once __DIR__ . '/lib/home_hero_settings.php';
 require_once __DIR__ . '/lib/home_listings_settings.php';
@@ -987,6 +989,71 @@ if ($method === 'POST' && $path === '/auth/login') {
   ]);
 
   json_response(issue_tokens((int)$user['id']));
+}
+
+// Auth: forgot password (always returns the same success message)
+if ($method === 'POST' && $path === '/auth/forgot-password') {
+  $body = read_json_body();
+  $email = strtolower(trim((string)($body['email'] ?? '')));
+  if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    json_response(['error' => 'invalid_input'], 400);
+  }
+
+  $pdo = db();
+  $stmt = $pdo->prepare("SELECT id, name, is_blocked FROM users WHERE email = :e LIMIT 1");
+  $stmt->execute([':e' => $email]);
+  $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+  $payload = [
+    'ok' => true,
+    'message' => 'If an account exists for that email, we sent a password reset link.',
+  ];
+
+  if ($user && (int)($user['is_blocked'] ?? 0) !== 1) {
+    $rawToken = create_password_reset_token($pdo, (int)$user['id']);
+    $resetUrl = password_reset_public_base_url() . '/reset-password?token=' . urlencode($rawToken);
+    $name = trim((string)($user['name'] ?? '')) ?: 'there';
+    $minutes = (int)(password_reset_ttl_seconds() / 60);
+    $mailBody = "Hi {$name},\n\n"
+      . "We received a request to reset your Aus Ticket Lanka password.\n\n"
+      . "Open this link to choose a new password (valid for {$minutes} minutes):\n"
+      . "{$resetUrl}\n\n"
+      . "If you did not request this, you can ignore this email.\n";
+
+    send_app_mail($email, 'Reset your password', $mailBody);
+
+    if (defined('PASSWORD_RESET_DEBUG') && PASSWORD_RESET_DEBUG) {
+      $payload['reset_url'] = $resetUrl;
+    }
+  }
+
+  json_response($payload);
+}
+
+// Auth: reset password with token from email/link
+if ($method === 'POST' && $path === '/auth/reset-password') {
+  $body = read_json_body();
+  $token = trim((string)($body['token'] ?? ''));
+  $password = (string)($body['password'] ?? '');
+
+  if ($token === '' || strlen($password) < 8) {
+    json_response(['error' => 'invalid_input'], 400);
+  }
+
+  $pdo = db();
+  $found = find_valid_password_reset_token($pdo, $token);
+  if (!$found) {
+    json_response(['error' => 'invalid_or_expired_token'], 400);
+  }
+
+  $hash = password_hash($password, PASSWORD_BCRYPT);
+  $stmt = $pdo->prepare("UPDATE users SET password_hash = :p WHERE id = :id");
+  $stmt->execute([':p' => $hash, ':id' => $found['user_id']]);
+
+  consume_password_reset_token($pdo, $found['token_id']);
+  revoke_user_refresh_tokens($pdo, $found['user_id']);
+
+  json_response(['ok' => true, 'message' => 'Password updated. You can sign in now.']);
 }
 
 // Auth: refresh
