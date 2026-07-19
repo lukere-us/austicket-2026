@@ -121,6 +121,11 @@ export async function buildAdminJs() {
       path.join(__dirname, 'components', 'BlogTitleWithSlug.jsx')
     ),
     BlogEditForm: componentLoader.add('BlogEditForm', path.join(__dirname, 'components', 'BlogEditForm.jsx')),
+    PageEditForm: componentLoader.add('PageEditForm', path.join(__dirname, 'components', 'PageEditForm.jsx')),
+    PageBannerUpload: componentLoader.add(
+      'PageBannerUpload',
+      path.join(__dirname, 'components', 'PageBannerUpload.jsx')
+    ),
     RolePermissionsForm: componentLoader.add(
       'RolePermissionsForm',
       path.join(__dirname, 'components', 'RolePermissionsForm.jsx')
@@ -647,6 +652,30 @@ export async function buildAdminJs() {
     strip(request.fields)
   }
 
+  function prepareCmsPageRequest(request) {
+    if (!request) return
+    const normalize = (obj) => {
+      if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return
+      if (!obj.status) obj.status = 'draft'
+      if (typeof obj.body_html === 'undefined') obj.body_html = ''
+      delete obj.embed_html
+      if (
+        !Object.prototype.hasOwnProperty.call(obj, 'parent_id') ||
+        obj.parent_id === '' ||
+        obj.parent_id === 'null' ||
+        obj.parent_id == null
+      ) {
+        obj.parent_id = null
+      } else {
+        const n = Number(obj.parent_id)
+        obj.parent_id = Number.isFinite(n) && n > 0 ? n : null
+      }
+      if (obj.banner_image === undefined) obj.banner_image = null
+    }
+    normalize(request.payload)
+    normalize(request.fields)
+  }
+
   function ensureListingAuditAdmins(request, context, { isNew }) {
     const adminId = context?.currentAdmin?.id
     if (!adminId) return
@@ -974,6 +1003,7 @@ export async function buildAdminJs() {
         en: {
           labels: {
             pages: 'Site settings',
+            cms_pages: 'Pages',
             admins: 'Admin users',
             admin_roles: 'Roles',
             admin_role_permissions: 'Role permissions (legacy)',
@@ -1509,6 +1539,98 @@ export async function buildAdminJs() {
             handler: async (request, response, context) => EditAction.handler(request, response, context),
             before: async (request, context) => {
               prepareBlogRequest(request)
+              ensureListingTimestamps(request)
+              ensureListingAuditAdmins(request, context, { isNew: false })
+              return request
+            },
+          },
+        },
+      }),
+      res('cms_pages', {
+        navigation: { name: 'Content', icon: 'Document' },
+        listProperties: ['banner_image', 'title', 'slug', 'parent_id', 'status', 'updated_at'],
+        editProperties: ['title', 'parent_id', 'banner_image', 'body_html', 'status'],
+        newProperties: ['title', 'parent_id', 'banner_image', 'body_html', 'status'],
+        showProperties: [
+          'banner_image',
+          'title',
+          'slug',
+          'parent_id',
+          'body_html',
+          'status',
+          'created_at',
+          'updated_at',
+        ],
+        filterProperties: ['title', 'slug', 'parent_id', 'status'],
+        sort: { sortBy: 'updated_at', direction: 'desc' },
+        properties: {
+          created_at: { isVisible: { list: true, show: true, edit: false, new: false, filter: false } },
+          updated_at: { isVisible: { list: true, show: true, edit: false, new: false, filter: false } },
+          created_by_admin_id: {
+            isVisible: { list: false, show: false, edit: false, new: false, filter: false },
+            reference: 'admins',
+          },
+          updated_by_admin_id: {
+            isVisible: { list: false, show: false, edit: false, new: false, filter: false },
+            reference: 'admins',
+          },
+          embed_html: {
+            isVisible: { list: false, show: false, edit: false, new: false, filter: false },
+          },
+          parent_id: {
+            reference: 'cms_pages',
+            isVisible: { list: true, show: true, edit: false, new: false, filter: true },
+          },
+          title: {
+            isTitle: true,
+            components: {
+              edit: Components.BlogTitleWithSlug,
+              new: Components.BlogTitleWithSlug,
+            },
+          },
+          slug: {
+            isVisible: { list: true, show: true, edit: false, new: false, filter: true },
+          },
+          banner_image: {
+            components: {
+              list: Components.PageBannerUpload,
+              show: Components.PageBannerUpload,
+              edit: Components.PageBannerUpload,
+            },
+          },
+          body_html: { type: 'richtext' },
+          status: {
+            availableValues: [
+              { value: 'draft', label: 'Draft' },
+              { value: 'published', label: 'Published' },
+              { value: 'unpublished', label: 'Unpublished' },
+            ],
+          },
+        },
+        actions: {
+          show: {
+            isVisible: false,
+          },
+          new: {
+            component: Components.PageEditForm,
+            hideActionHeader: true,
+            layout: [],
+            handler: async (request, response, context) => NewAction.handler(request, response, context),
+            before: async (request, context) => {
+              prepareCmsPageRequest(request)
+              ensureListingTimestamps(request)
+              ensureBlogSlug(request)
+              ensureListingAuditAdmins(request, context, { isNew: true })
+              return request
+            },
+          },
+          edit: {
+            component: Components.PageEditForm,
+            hideActionHeader: true,
+            layout: [],
+            handler: async (request, response, context) => EditAction.handler(request, response, context),
+            before: async (request, context) => {
+              prepareCmsPageRequest(request)
               ensureListingTimestamps(request)
               ensureListingAuditAdmins(request, context, { isNew: false })
               return request

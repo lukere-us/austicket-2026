@@ -165,6 +165,7 @@ export const ADMIN_HELP_HTML = `
   <section id="help-blogs" class="admin-help-doc__section">
     <h2>5. Blogs</h2>
     <p><strong>Content → Blogs</strong> — create articles for <code>/blogs</code> and the homepage blog section.</p>
+    <p><strong>Content → Pages</strong> — CMS pages with title, banner, optional parent (breadcrumbs), and rich-text detail. Public URL: <code>/{slug}</code> (not <code>/pages/…</code>).</p>
     <ul>
       <li><strong>Title &amp; slug</strong> — slug is generated from title; edit if needed.</li>
       <li><strong>Cover image</strong> — upload or set stored path.</li>

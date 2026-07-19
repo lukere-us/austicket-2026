@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import ReactQuill from 'react-quill'
 
 const QUILL_MODULES = {
@@ -25,8 +25,17 @@ export function ensureQuillStylesheet() {
   document.head.appendChild(link)
 }
 
+/**
+ * @param {{
+ *   value?: string
+ *   onChange?: (html: string) => void
+ *   minHeight?: number
+ *   modeToggle?: boolean
+ * }} props
+ */
 export default function RichTextEditor(props) {
-  const { value, onChange, minHeight = 300 } = props
+  const { value, onChange, minHeight = 300, modeToggle = false } = props
+  const [mode, setMode] = useState('visual')
 
   useEffect(() => {
     ensureQuillStylesheet()
@@ -34,13 +43,47 @@ export default function RichTextEditor(props) {
 
   return (
     <div className="admin-rich-text-editor" style={{ minHeight }}>
-      <ReactQuill
-        theme="snow"
-        value={value || ''}
-        onChange={onChange}
-        style={{ height: minHeight }}
-        modules={QUILL_MODULES}
-      />
+      {modeToggle ? (
+        <div className="admin-rich-text-editor__modes" role="tablist" aria-label="Editor mode">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'visual'}
+            className={`admin-rich-text-editor__mode${mode === 'visual' ? ' is-active' : ''}`}
+            onClick={() => setMode('visual')}
+          >
+            Visual
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'html'}
+            className={`admin-rich-text-editor__mode${mode === 'html' ? ' is-active' : ''}`}
+            onClick={() => setMode('html')}
+          >
+            HTML
+          </button>
+        </div>
+      ) : null}
+
+      {mode === 'html' ? (
+        <textarea
+          className="admin-rich-text-editor__html"
+          value={value || ''}
+          onChange={(e) => onChange?.(e.target.value)}
+          style={{ minHeight }}
+          spellCheck={false}
+          placeholder="<p>Page content…</p>"
+        />
+      ) : (
+        <ReactQuill
+          theme="snow"
+          value={value || ''}
+          onChange={onChange}
+          style={{ height: minHeight }}
+          modules={QUILL_MODULES}
+        />
+      )}
     </div>
   )
 }

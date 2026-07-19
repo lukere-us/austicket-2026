@@ -16,6 +16,7 @@ require_once __DIR__ . '/lib/partners_settings.php';
 require_once __DIR__ . '/lib/ads_settings.php';
 require_once __DIR__ . '/lib/youtube_carousel_settings.php';
 require_once __DIR__ . '/lib/blogs.php';
+require_once __DIR__ . '/lib/cms_pages.php';
 require_once __DIR__ . '/lib/home_hero_stats.php';
 
 cors();
@@ -1486,6 +1487,64 @@ if ($method === 'GET' && preg_match('#^/blogs/([^/]+)$#', $path, $m)) {
 
   json_response([
     'blog' => $blog,
+    'recent_blogs' => $recentBlogs,
+    'recent_events' => $recentEvents,
+  ]);
+}
+
+if ($method === 'GET' && $path === '/pages') {
+  header('Cache-Control: no-store, no-cache, must-revalidate');
+  header('Pragma: no-cache');
+  $pdo = db();
+  $limit = isset($_GET['limit']) ? max(1, min(100, (int)$_GET['limit'])) : 50;
+  json_response(['items' => fetch_published_cms_pages($pdo, $limit)]);
+}
+
+if ($method === 'GET' && preg_match('#^/pages/([^/]+)$#', $path, $m)) {
+  header('Cache-Control: no-store, no-cache, must-revalidate');
+  header('Pragma: no-cache');
+  $slug = rawurldecode($m[1]);
+  $pdo = db();
+  $page = fetch_cms_page_by_slug($pdo, $slug);
+  if (!$page) {
+    json_response(['error' => 'not_found'], 404);
+  }
+
+  $countryName = normalize_country_name($_GET['country'] ?? null);
+  $breadcrumb = fetch_cms_page_breadcrumb($pdo, $page);
+  $recentBlogs = fetch_published_blogs($pdo, 6);
+  $eventWhere = ['1=1'];
+  $eventParams = [];
+  if ($countryName !== null) {
+    $eventWhere[] = listing_country_exists_sql(':country_name');
+    $eventParams[':country_name'] = $countryName;
+  }
+  $recentEventRows = fetch_listing_cards(
+    $pdo,
+    $eventWhere,
+    $eventParams,
+    'COALESCE(l.publish_at, l.created_at) DESC, l.id DESC',
+    6
+  );
+  $recentEvents = array_map(static function (array $row): array {
+    $location = trim((string)($row['event_location'] ?? ''));
+    $cityName = null;
+    if ($location !== '') {
+      $parts = array_map('trim', explode(',', $location));
+      $cityName = $parts[count($parts) - 1] ?? $location;
+    }
+    return [
+      'id' => (int)($row['id'] ?? 0),
+      'title' => (string)($row['title'] ?? ''),
+      'slug' => (string)($row['slug'] ?? ''),
+      'banner_image' => $row['banner_image'] ?? null,
+      'city_name' => $cityName,
+    ];
+  }, $recentEventRows);
+
+  json_response([
+    'page' => $page,
+    'breadcrumb' => $breadcrumb,
     'recent_blogs' => $recentBlogs,
     'recent_events' => $recentEvents,
   ]);

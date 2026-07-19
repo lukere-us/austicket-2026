@@ -15,6 +15,7 @@ import { buildAdminJs } from './adminjs.js'
 import { dbPool, getDbConfig } from './db.js'
 import { ensureShowTimesTable } from './lib/ensureShowTimesTable.js'
 import { ensureBlogsSchema } from './lib/ensureBlogsSchema.js'
+import { ensureCmsPagesSchema } from './lib/ensureCmsPagesSchema.js'
 import { ensureListingsOrganizer } from './lib/ensureListingsOrganizer.js'
 import { ensurePageVisitsVisitedAt } from './lib/ensurePageVisitsVisitedAt.js'
 import { ensureMainAdminPermissions } from './lib/ensureMainAdminPermissions.js'
@@ -148,6 +149,7 @@ async function start() {
   await waitForDatabase()
   await ensureShowTimesTable(dbPool())
   await ensureBlogsSchema(dbPool())
+  await ensureCmsPagesSchema(dbPool())
   await ensureListingsOrganizer(dbPool())
   await ensurePageVisitsVisitedAt(dbPool())
   await ensureMainAdminPermissions(dbPool())
@@ -685,6 +687,57 @@ async function start() {
             fileName: name,
             publicUrl: `${adminJs.options.rootPath}/uploads-root/${encodeURIComponent(`blogs/${name}`)}`,
             storedPath: `Upload/blogs/${name}`,
+          },
+        })
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('upload error', e)
+        res.status(500).json({ error: e?.message || String(e) })
+      }
+    }
+  )
+
+  app.post(
+    `${adminJs.options.rootPath}/api/uploads/page-banner`,
+    sessionMiddleware,
+    requireUploadPermission,
+    formidableMiddleware({
+      multiples: false,
+      maxFileSize: 4 * 1024 * 1024,
+      uploadDir: os.tmpdir(),
+    }),
+    async (req, res) => {
+      try {
+        const file = req.files?.file ?? req.files?.image ?? req.files?.files ?? null
+        const f = Array.isArray(file) ? file[0] : file
+        if (!f) return res.status(400).json({ error: 'No file uploaded' })
+
+        const type = String(f?.type || '')
+        if (!type.startsWith('image/')) {
+          return res.status(400).json({ error: 'Only image uploads are allowed' })
+        }
+        const size = Number(f?.size || 0)
+        if (size > 4 * 1024 * 1024) {
+          return res.status(400).json({ error: 'File must be <= 4MB' })
+        }
+
+        const pageDir = path.join(UPLOAD_DIR, 'pages')
+        await fs.mkdir(pageDir, { recursive: true })
+
+        const orig = String(f?.name || 'image')
+        const ext = path.extname(orig).slice(0, 10) || '.jpg'
+        const safeExt = ext.replace(/[^.\w]/g, '')
+        const name = `page_${Date.now()}_${Math.random().toString(16).slice(2)}${safeExt}`
+        const destAbs = path.join(pageDir, name)
+        const tmp = f?.path
+        if (!tmp) return res.status(400).json({ error: 'Invalid upload' })
+        await moveFile(tmp, destAbs)
+
+        res.json({
+          file: {
+            fileName: name,
+            publicUrl: `${adminJs.options.rootPath}/uploads-root/${encodeURIComponent(`pages/${name}`)}`,
+            storedPath: `Upload/pages/${name}`,
           },
         })
       } catch (e) {

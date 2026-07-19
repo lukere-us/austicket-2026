@@ -77,7 +77,7 @@ export default function BlogTitleWithSlug(props) {
           placeholder={isNew ? 'Auto-generated from title' : ''}
         />
         <Text variant="sm" color="grey60" mt="sm">
-          {isNew ? 'Generated from the title. You can edit it before saving.' : 'URL path for this blog post.'}
+          {isNew ? 'Generated from the title. You can edit it before saving.' : 'URL path segment for this content.'}
         </Text>
       </Box>
     </Box>
