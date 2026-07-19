@@ -37,6 +37,9 @@ function ads_clone_items(array $items): array
       'embedHtml' => trim((string)($item['embedHtml'] ?? '')),
       'iframeUrl' => trim((string)($item['iframeUrl'] ?? '')),
       'enabled' => !array_key_exists('enabled', $item) || site_settings_bool($item['enabled'], true),
+      'showOnDetailsPage' => array_key_exists('showOnDetailsPage', $item)
+        ? site_settings_bool($item['showOnDetailsPage'], false)
+        : false,
     ];
 
     $ok = match ($adType) {

@@ -41,6 +41,7 @@ function emptyAd() {
     embedHtml: '',
     iframeUrl: '',
     enabled: true,
+    showOnDetailsPage: false,
   }
 }
 
@@ -72,8 +73,8 @@ function AdItemsEditor({ rows, onChange }) {
       <H4 mb="md">Ads</H4>
       <Text variant="sm" color="grey60" mb="md">
         Add any number of ads. Types: Image (optional click link), YouTube video, Embed HTML, or Iframe URL.
-        Published ads appear below Partners on the homepage and in the right column on listing and blog detail
-        pages.
+        Check <strong>Show in Details page</strong> to place an ad only in the listing detail sidebar; leave it
+        unchecked for homepage and blog sidebar.
       </Text>
 
       {rows.map((row, index) => (
@@ -96,6 +97,14 @@ function AdItemsEditor({ rows, onChange }) {
                   onChange={(e) => updateRow(index, { enabled: e.target.checked })}
                 />
                 Enabled
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                <input
+                  type="checkbox"
+                  checked={Boolean(row.showOnDetailsPage)}
+                  onChange={(e) => updateRow(index, { showOnDetailsPage: e.target.checked })}
+                />
+                Show in Details page
               </label>
               <Button type="button" size="sm" variant="text" disabled={index === 0} onClick={() => moveRow(index, -1)}>
                 Up
@@ -316,8 +325,8 @@ export default function AdsSettings() {
     <Box variant="white" p="xxl">
       <H2>Ads</H2>
       <Text variant="sm" color="grey60" mt="sm" mb="xl">
-        Manage homepage and sidebar ads. Homepage ads sit below the Partners slider; the same published ads
-        show in the right column on listing and blog detail pages.
+        Manage homepage, blog, and listing-detail ads. Use <strong>Show in Details page</strong> on each ad to
+        place it only in the listing detail sidebar; unchecked ads appear on the homepage and blog sidebars.
       </Text>
 
       <form ref={formRef} key={formKey} onSubmit={(e) => e.preventDefault()}>

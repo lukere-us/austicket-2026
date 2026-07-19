@@ -8,6 +8,7 @@ const DEFAULTS = {
   gridGapX: 16,
   gridGapY: 32,
   showCityTabs: true,
+  locationTabsMode: 'cities',
   showSectionDecorLines: true,
   sectionTitle: 'Top Events in {location}',
   sectionSubtitle: 'Find Events in Your City.',
@@ -48,13 +49,23 @@ export const FIELD_GROUPS = [
     id: 'section',
     label: 'Section header',
     fields: [
-      { key: 'showCityTabs', label: 'Show city tabs', type: 'boolean' },
+      { key: 'showCityTabs', label: 'Show location tabs', type: 'boolean' },
+      {
+        key: 'locationTabsMode',
+        label: 'Location tabs show',
+        type: 'select',
+        options: [
+          { value: 'cities', label: 'Cities' },
+          { value: 'states', label: 'States' },
+        ],
+        help: 'Homepage Top Events navigation: filter by city or by state. Clicking a tab loads matching events.',
+      },
       { key: 'showSectionDecorLines', label: 'Show decorative lines beside title', type: 'boolean' },
       {
         key: 'sectionTitle',
         label: 'Section title',
         type: 'text',
-        help: 'Use {location} for the city or country name.',
+        help: 'Use {location} for the city, state, or country name.',
       },
       { key: 'sectionSubtitle', label: 'Section subtitle', type: 'text' },
     ],

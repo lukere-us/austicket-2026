@@ -29,7 +29,7 @@ export const FIELD_GROUPS = [
         label: 'Publish status',
         type: 'select',
         options: PUBLISH_STATUS_OPTIONS,
-        help: 'Draft hides ads on the public site. Published shows them on homepage, listing detail, and blog detail.',
+        help: 'Draft hides ads on the public site. Published shows all enabled ads on the homepage (and blog). Listing detail sidebar only shows ads with “Show in Details page” checked.',
       },
       {
         key: 'adsPerRow',
@@ -86,6 +86,7 @@ function cloneItems(items) {
         embedHtml: String(item?.embedHtml ?? '').trim(),
         iframeUrl: String(item?.iframeUrl ?? '').trim(),
         enabled: item?.enabled !== false && item?.enabled !== 0 && item?.enabled !== '0',
+        showOnDetailsPage: clampBool(item?.showOnDetailsPage, false),
       }
       return out
     })

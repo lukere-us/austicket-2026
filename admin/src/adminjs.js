@@ -297,6 +297,8 @@ export async function buildAdminJs() {
     'banner_image',
     'detail_banner_image',
     'trailer_url',
+    'sponsor_banner_image',
+    'sponsor_banner_url',
     'publish_at',
     'unpublish_at',
     'created_by_admin_id',
@@ -361,6 +363,18 @@ export async function buildAdminJs() {
         obj.is_featured = 1
       } else {
         obj.is_featured = 0
+      }
+      if (!Object.prototype.hasOwnProperty.call(obj, 'show_countdown') || listingEmptyFormValue(obj.show_countdown)) {
+        obj.show_countdown = 1
+      } else if (
+        obj.show_countdown === true ||
+        obj.show_countdown === 'true' ||
+        obj.show_countdown === '1' ||
+        obj.show_countdown === 1
+      ) {
+        obj.show_countdown = 1
+      } else {
+        obj.show_countdown = 0
       }
     }
 
@@ -857,7 +871,8 @@ export async function buildAdminJs() {
       const [srcRows] = await conn.execute(
         `
           SELECT type_id, title, slug, description_html, banner_image, detail_banner_image, trailer_url,
-                 organizer_partner_id, status, publish_at, unpublish_at
+                 organizer_partner_id, show_countdown, sponsor_banner_image, sponsor_banner_url,
+                 status, publish_at, unpublish_at
           FROM listings WHERE id = ?
         `,
         [sourceListingId]
@@ -874,9 +889,10 @@ export async function buildAdminJs() {
         `
           INSERT INTO listings
             (type_id, title, slug, description_html, banner_image, detail_banner_image, trailer_url,
-             organizer_partner_id, status, publish_at, unpublish_at, created_by_admin_id, updated_by_admin_id,
+             organizer_partner_id, show_countdown, sponsor_banner_image, sponsor_banner_url,
+             status, publish_at, unpublish_at, created_by_admin_id, updated_by_admin_id,
              created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         [
           src.type_id,
@@ -887,6 +903,9 @@ export async function buildAdminJs() {
           src.detail_banner_image,
           src.trailer_url,
           src.organizer_partner_id ?? null,
+          src.show_countdown == null ? 1 : Number(src.show_countdown) ? 1 : 0,
+          src.sponsor_banner_image ?? null,
+          src.sponsor_banner_url ?? null,
           src.status,
           src.publish_at,
           src.unpublish_at,
@@ -1249,6 +1268,12 @@ export async function buildAdminJs() {
               isRequired: false,
               props: { label: 'Featured item' },
             },
+            show_countdown: {
+              type: 'boolean',
+              isRequired: false,
+              isVisible: { list: false, filter: false, show: true, edit: false, new: false },
+              props: { label: 'Show countdown box' },
+            },
             organizer_partner_id: {
               type: 'string',
               isVisible: { list: false, filter: false, show: true, edit: true },
@@ -1283,6 +1308,15 @@ export async function buildAdminJs() {
               components: {
                 show: Components.ImageThumb,
               },
+            },
+            sponsor_banner_image: {
+              isVisible: { list: false, show: true, edit: false, filter: false },
+              components: {
+                show: Components.ImageThumb,
+              },
+            },
+            sponsor_banner_url: {
+              isVisible: { list: false, show: true, edit: false, filter: false },
             },
           },
           actions: {

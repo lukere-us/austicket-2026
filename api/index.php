@@ -219,6 +219,21 @@ function listing_city_exists_sql(string $cityParam): string
   ";
 }
 
+function listing_state_exists_sql(string $stateParam): string
+{
+  return "
+    EXISTS (
+      SELECT 1
+      FROM shows s
+      JOIN places p ON p.id = s.place_id
+      JOIN cities c ON c.id = p.city_id
+      JOIN states st ON st.id = c.state_id
+      WHERE s.listing_id = l.id
+        AND st.name = $stateParam
+    )
+  ";
+}
+
 function attach_show_times_to_shows(PDO $pdo, array $shows): array
 {
   if (!count($shows)) return $shows;
@@ -631,6 +646,38 @@ if ($method === 'GET' && $path === '/cities') {
   json_response(['items' => $rows]);
 }
 
+// Public: states with published listings (optionally scoped to country)
+if ($method === 'GET' && $path === '/states') {
+  $pdo = db();
+  $params = [];
+  $where = listing_visible_where();
+
+  $countryName = normalize_country_name($_GET['country'] ?? null);
+  if ($countryName !== null) {
+    $where[] = 'co.name = :country_name';
+    $params[':country_name'] = $countryName;
+  }
+
+  $sql = "
+    SELECT st.id, st.name, COUNT(DISTINCT l.id) AS event_count
+    FROM states st
+    JOIN countries co ON co.id = st.country_id
+    JOIN cities c ON c.state_id = st.id
+    JOIN places p ON p.city_id = c.id
+    JOIN shows s ON s.place_id = p.id
+    JOIN listings l ON l.id = s.listing_id
+    WHERE " . implode(' AND ', $where) . "
+    GROUP BY st.id, st.name
+    ORDER BY event_count DESC, st.name ASC
+  ";
+
+  $stmt = $pdo->prepare($sql);
+  $stmt->execute($params);
+  $rows = $stmt->fetchAll();
+
+  json_response(['items' => $rows]);
+}
+
 // Public: list listings
 if ($method === 'GET' && $path === '/listings') {
   $pdo = db();
@@ -645,6 +692,11 @@ if ($method === 'GET' && $path === '/listings') {
   if (!empty($_GET['city'])) {
     $extra[] = listing_city_exists_sql(':city_name');
     $params[':city_name'] = (string)$_GET['city'];
+  }
+
+  if (!empty($_GET['state'])) {
+    $extra[] = listing_state_exists_sql(':state_name');
+    $params[':state_name'] = (string)$_GET['state'];
   }
 
   $countryName = normalize_country_name($_GET['country'] ?? null);
@@ -854,6 +906,11 @@ if ($method === 'GET' && preg_match('#^/listings/([^/]+)$#', $path, $m)) {
 
   $organizer = resolve_partner_organizer($pdo, $listing['organizer_partner_id'] ?? null);
   unset($listing['organizer_partner_id']);
+  $listing['show_countdown'] = ((int)($listing['show_countdown'] ?? 1) === 1) ? 1 : 0;
+  $sponsorImage = trim((string)($listing['sponsor_banner_image'] ?? ''));
+  $sponsorUrl = trim((string)($listing['sponsor_banner_url'] ?? ''));
+  $listing['sponsor_banner_image'] = $sponsorImage !== '' ? $sponsorImage : null;
+  $listing['sponsor_banner_url'] = $sponsorUrl !== '' ? $sponsorUrl : null;
 
   json_response([
     'listing' => $listing,

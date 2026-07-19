@@ -14,6 +14,7 @@ function home_listings_default_settings(): array
     'gridGapX' => 16,
     'gridGapY' => 32,
     'showCityTabs' => true,
+    'locationTabsMode' => 'cities',
     'showSectionDecorLines' => true,
     'sectionTitle' => 'Top Events in {location}',
     'sectionSubtitle' => 'Find Events in Your City.',
@@ -42,6 +43,7 @@ function home_listings_merge_settings(array $input): array
     'gridGapX' => ['num', 0, 64],
     'gridGapY' => ['num', 0, 96],
     'showCityTabs' => 'bool',
+    'locationTabsMode' => 'tabsMode',
     'showSectionDecorLines' => 'bool',
     'sectionTitle' => 'text',
     'sectionSubtitle' => 'text',
@@ -72,6 +74,11 @@ function home_listings_merge_settings(array $input): array
     }
     if ($rule === 'aspect') {
       $out[$key] = in_array($raw, ['2/3', '3/4', '1/1'], true) ? $raw : $fallback;
+      continue;
+    }
+    if ($rule === 'tabsMode') {
+      $mode = strtolower(trim((string)$raw));
+      $out[$key] = in_array($mode, ['cities', 'states'], true) ? $mode : $fallback;
       continue;
     }
     if (is_array($rule) && ($rule[0] ?? '') === 'num') {

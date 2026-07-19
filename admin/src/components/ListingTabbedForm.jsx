@@ -16,6 +16,7 @@ import {
 import {
 	Box,
 	Button,
+	CheckBox,
 	H2,
 	Icon,
 	Input,
@@ -89,6 +90,7 @@ function buildRecordState(
 			params: {
 				status: "draft",
 				is_featured: false,
+				show_countdown: true,
 			},
 			errors:
 				{},
@@ -124,6 +126,16 @@ function buildRecordState(
 			""
 	) {
 		params.is_featured = false;
+	}
+	if (
+		params.show_countdown ===
+			undefined ||
+		params.show_countdown ===
+			null ||
+		params.show_countdown ===
+			""
+	) {
+		params.show_countdown = true;
 	}
 	for (const key of [
 		"publish_at",
@@ -367,6 +379,162 @@ function parseShowBoundaryDate(
 	);
 }
 
+function showPlaceLabel(
+	show,
+	placeOptions,
+) {
+	const placeId =
+		show?.place_id !=
+		null
+			? String(
+					show.place_id,
+				)
+			: "";
+	if (
+		!placeId
+	)
+		return "No place";
+	const match =
+		(
+			placeOptions ||
+			[]
+		).find(
+			(
+				o,
+			) =>
+				String(
+					o.value,
+				) ===
+				placeId,
+		);
+	return (
+		match?.label ||
+		`Place #${placeId}`
+	);
+}
+
+function showDateLabel(
+	show,
+) {
+	const startYmd =
+		extractShowCalendarYmd(
+			show?.start_date,
+		);
+	const endYmd =
+		extractShowCalendarYmd(
+			show?.end_date,
+		);
+	if (
+		startYmd &&
+		endYmd &&
+		startYmd !==
+			endYmd
+	) {
+		return `${startYmd} → ${endYmd}`;
+	}
+	if (
+		startYmd
+	)
+		return startYmd;
+	if (
+		endYmd
+	)
+		return endYmd;
+	const times =
+		Array.isArray(
+			show?.times,
+		)
+			? show.times
+			: [];
+	for (const t of times) {
+		const ymd =
+			extractShowCalendarYmd(
+				t?.show_time,
+			);
+		if (
+			ymd
+		)
+			return ymd;
+	}
+	return "No date";
+}
+
+function showMatchesSearch(
+	show,
+	showIdx,
+	query,
+	placeOptions,
+) {
+	const q =
+		String(
+			query ||
+				"",
+		)
+			.trim()
+			.toLowerCase();
+	if (
+		!q
+	)
+		return true;
+	const place =
+		showPlaceLabel(
+			show,
+			placeOptions,
+		);
+	const date =
+		showDateLabel(
+			show,
+		);
+	const times =
+		Array.isArray(
+			show?.times,
+		)
+			? show.times
+			: [];
+	const timeBits =
+		times
+			.map(
+				(
+					t,
+				) =>
+					[
+						t?.show_time,
+						t?.notes,
+					]
+						.filter(
+							Boolean,
+						)
+						.join(
+							" ",
+						),
+			)
+			.join(
+				" ",
+			);
+	const hay =
+		[
+			`show #${showIdx + 1}`,
+			`#${showIdx + 1}`,
+			place,
+			date,
+			show?.start_date,
+			show?.end_date,
+			show?.booking_url,
+			show?.ticket_price,
+			timeBits,
+		]
+			.filter(
+				Boolean,
+			)
+			.join(
+				" ",
+			)
+			.toLowerCase();
+	return hay.includes(
+		q,
+	);
+}
+
 function showsHaveUserInput(
 	showsPayload,
 ) {
@@ -457,6 +625,8 @@ function sanitizeListingFormParams(
 		"banner_image",
 		"detail_banner_image",
 		"trailer_url",
+		"sponsor_banner_image",
+		"sponsor_banner_url",
 		"publish_at",
 		"unpublish_at",
 	]) {
@@ -514,6 +684,29 @@ function sanitizeListingFormParams(
 		out.is_featured = false;
 	}
 	if (
+		out.show_countdown ===
+			undefined ||
+		out.show_countdown ===
+			null ||
+		out.show_countdown ===
+			""
+	) {
+		out.show_countdown = true;
+	} else if (
+		out.show_countdown ===
+			true ||
+		out.show_countdown ===
+			"true" ||
+		out.show_countdown ===
+			"1" ||
+		out.show_countdown ===
+			1
+	) {
+		out.show_countdown = true;
+	} else {
+		out.show_countdown = false;
+	}
+	if (
 		out.organizer_partner_id ===
 			undefined ||
 		out.organizer_partner_id ===
@@ -539,15 +732,18 @@ const LISTING_SAVE_KEYS = [
 	"title",
 	"slug",
 	"description_html",
-	"banner_image",
-	"detail_banner_image",
-	"trailer_url",
-	"organizer_partner_id",
-	"status",
-	"is_featured",
-	"publish_at",
-	"unpublish_at",
-];
+		"banner_image",
+		"detail_banner_image",
+		"trailer_url",
+		"sponsor_banner_image",
+		"sponsor_banner_url",
+		"organizer_partner_id",
+		"status",
+		"is_featured",
+		"show_countdown",
+		"publish_at",
+		"unpublish_at",
+	];
 
 function pickListingSaveParams(
 	params,
@@ -2261,6 +2457,13 @@ export default function ListingTabbedForm(
 			null,
 		);
 	const [
+		showsSearch,
+		setShowsSearch,
+	] =
+		useState(
+			"",
+		);
+	const [
 		isSaving,
 		setIsSaving,
 	] =
@@ -2447,7 +2650,13 @@ export default function ListingTabbedForm(
 					p.propertyPath !==
 						"trailer_url" &&
 					p.propertyPath !==
+						"sponsor_banner_image" &&
+					p.propertyPath !==
+						"sponsor_banner_url" &&
+					p.propertyPath !==
 						"organizer_partner_id" &&
+					p.propertyPath !==
+						"show_countdown" &&
 					p.propertyPath !==
 						"description_html" &&
 					p.propertyPath !==
@@ -3298,6 +3507,17 @@ export default function ListingTabbedForm(
 			);
 		};
 
+	const onUploadSponsorBanner =
+		async (
+			files,
+		) => {
+			await uploadBannerFiles(
+				files,
+				"sponsor_banner_image",
+				"Sponsor banner",
+			);
+		};
+
 	useEffect(() => {
 		if (
 			!saveAsEdit ||
@@ -3484,6 +3704,9 @@ export default function ListingTabbedForm(
 		() => {
 			const next =
 				makeEmptyShow();
+			setShowsSearch(
+				"",
+			);
 			setShowsPayload(
 				(
 					prev,
@@ -4418,6 +4641,45 @@ export default function ListingTabbedForm(
 			}
 		};
 
+	const filteredShows =
+		useMemo(
+			() => {
+				const all =
+					Array.isArray(
+						showsPayload?.shows,
+					)
+						? showsPayload.shows
+						: [];
+				return all
+					.map(
+						(
+							s,
+							showIdx,
+						) => ({
+							s,
+							showIdx,
+						}),
+					)
+					.filter(
+						({
+							s,
+							showIdx,
+						}) =>
+							showMatchesSearch(
+								s,
+								showIdx,
+								showsSearch,
+								placeOptions,
+							),
+					);
+			},
+			[
+				showsPayload,
+				showsSearch,
+				placeOptions,
+			],
+		);
+
 	return (
 		<Box variant="white">
 			<H2>
@@ -4551,6 +4813,29 @@ export default function ListingTabbedForm(
 								</option>
 							))}
 						</select>
+					</Box>
+
+					<Box mb="xl">
+						<CheckBox
+							id="listing-show-countdown"
+							checked={Boolean(
+								record?.params?.show_countdown === 1 ||
+									record?.params?.show_countdown === "1" ||
+									record?.params?.show_countdown === true,
+							)}
+							onChange={(e) =>
+								handleListingFieldChange(
+									"show_countdown",
+									e.target.checked ? 1 : 0,
+								)
+							}
+						/>
+						<Label inline htmlFor="listing-show-countdown" ml="default">
+							Show countdown box
+						</Label>
+						<Text variant="sm" color="grey60" mt="sm">
+							When enabled, the event countdown / count-up card appears on the listing detail page (next to the poster).
+						</Text>
 					</Box>
 
 					<Box
@@ -4913,6 +5198,67 @@ export default function ListingTabbedForm(
 						p="lg"
 						borderRadius="lg"
 						style={{
+							background: "#fff",
+							border: "1px solid rgba(0,0,0,0.06)",
+						}}
+					>
+						<Label mb="sm">Sponsor banner</Label>
+						<Text variant="sm" color="grey60" mb="lg">
+							Shown at the top of the listing detail right column. Optional link opens in a new tab.
+						</Text>
+						<Box
+							display="grid"
+							style={{
+								gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+								gap: 20,
+								alignItems: "start",
+							}}
+						>
+							<ImageDropzone
+								label="Sponsor banner image"
+								hint="Max 4MB. Recommended wide or square ad format."
+								previewUrl={toListingMediaUrl(
+									record?.params?.sponsor_banner_image,
+								)}
+								previewAlt="Sponsor banner"
+								previewAspect="16 / 9"
+								uploading={bannerUploading}
+								onFiles={onUploadSponsorBanner}
+								onClear={
+									record?.params?.sponsor_banner_image
+										? () =>
+												handlePropertyChange(
+													"sponsor_banner_image",
+													"",
+												)
+										: undefined
+								}
+								emptyTitle="Drop sponsor banner"
+								emptySubtitle="JPEG, PNG, or WebP"
+							/>
+							<Box>
+								<Label htmlFor="sponsor-banner-url">Sponsor link (optional)</Label>
+								<Input
+									id="sponsor-banner-url"
+									value={record?.params?.sponsor_banner_url || ""}
+									onChange={(e) =>
+										handlePropertyChange("sponsor_banner_url", e.target.value)
+									}
+									placeholder="https://example.com"
+									style={{ width: "100%", marginTop: 8 }}
+								/>
+								<Text variant="sm" color="grey60" mt="sm">
+									If set, clicking the banner opens this URL in a new tab.
+								</Text>
+							</Box>
+						</Box>
+					</Box>
+
+					<Box
+						mt="xl"
+						p="lg"
+						borderRadius="lg"
+						style={{
 							background:
 								"#fff",
 							border: "1px solid rgba(0,0,0,0.06)",
@@ -5131,6 +5477,58 @@ export default function ListingTabbedForm(
 						showsPayload?.shows ||
 						[]
 					)
+						.length >
+					0 ? (
+						<Box
+							mt="lg"
+							maxWidth={480}
+						>
+							<Label>
+								Quick
+								search
+								shows
+							</Label>
+							<Input
+								value={
+									showsSearch
+								}
+								onChange={(
+									e,
+								) =>
+									setShowsSearch(
+										e
+											.target
+											.value,
+									)
+								}
+								placeholder="Search by place, date, show #…"
+							/>
+							{showsSearch.trim() ? (
+								<Text
+									variant="sm"
+									color="grey60"
+									mt="sm"
+								>
+									Showing{" "}
+									{
+										filteredShows.length
+									}{" "}
+									of{" "}
+									{(
+										showsPayload?.shows ||
+										[]
+									)
+										.length}{" "}
+									shows
+								</Text>
+							) : null}
+						</Box>
+					) : null}
+
+					{(
+						showsPayload?.shows ||
+						[]
+					)
 						.length ===
 					0 ? (
 						<Box mt="xl">
@@ -5141,16 +5539,24 @@ export default function ListingTabbedForm(
 								yet.
 							</Text>
 						</Box>
+					) : filteredShows.length ===
+					  0 ? (
+						<Box mt="xl">
+							<Text>
+								No
+								shows
+								match
+								your
+								search.
+							</Text>
+						</Box>
 					) : null}
 
-					{(
-						showsPayload?.shows ||
-						[]
-					).map(
-						(
+					{filteredShows.map(
+						({
 							s,
 							showIdx,
-						) => {
+						}) => {
 							const isOpen =
 								Boolean(
 									s?.__key &&
@@ -5168,6 +5574,15 @@ export default function ListingTabbedForm(
 												? null
 												: s.__key,
 									);
+							const placeTitle =
+								showPlaceLabel(
+									s,
+									placeOptions,
+								);
+							const dateTitle =
+								showDateLabel(
+									s,
+								);
 
 							return (
 								<Box
@@ -5204,16 +5619,17 @@ export default function ListingTabbedForm(
 											isOpen
 										}
 									>
-										<H2
-											style={{
-												margin: 0,
-											}}
-										>
-											Show
-											#
-											{showIdx +
-												1}
-										</H2>
+										<Box>
+											<H2
+												style={{
+													margin: 0,
+													fontSize: 18,
+													lineHeight: 1.35,
+												}}
+											>
+												{`Show #${showIdx + 1} - ${placeTitle} · ${dateTitle}`}
+											</H2>
+										</Box>
 										<Text
 											variant="sm"
 											color="grey60"
