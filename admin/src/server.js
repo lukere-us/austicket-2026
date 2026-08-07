@@ -18,6 +18,7 @@ import { ensureBlogsSchema } from './lib/ensureBlogsSchema.js'
 import { ensureCmsPagesSchema } from './lib/ensureCmsPagesSchema.js'
 import { ensureListingsOrganizer } from './lib/ensureListingsOrganizer.js'
 import { ensureListingsShowCountdown } from './lib/ensureListingsShowCountdown.js'
+import { ensureListingsShowSidebarAds } from './lib/ensureListingsShowSidebarAds.js'
 import { ensureListingsSponsorBanner } from './lib/ensureListingsSponsorBanner.js'
 import { ensurePageVisitsVisitedAt } from './lib/ensurePageVisitsVisitedAt.js'
 import { ensureMainAdminPermissions } from './lib/ensureMainAdminPermissions.js'
@@ -154,6 +155,7 @@ async function start() {
   await ensureCmsPagesSchema(dbPool())
   await ensureListingsOrganizer(dbPool())
   await ensureListingsShowCountdown(dbPool())
+  await ensureListingsShowSidebarAds(dbPool())
   await ensureListingsSponsorBanner(dbPool())
   await ensurePageVisitsVisitedAt(dbPool())
   await ensureMainAdminPermissions(dbPool())

@@ -5,7 +5,6 @@ import React, {
 	useRef,
 	useState,
 } from "react";
-import ReactQuill from "react-quill";
 import {
 	ApiClient,
 	BasePropertyComponent,
@@ -32,7 +31,48 @@ import ListingUnpublishDate from "./ListingUnpublishDate.jsx";
 import ModernDatePicker from "./ModernDatePicker.jsx";
 import ModernTimePicker from "./ModernTimePicker.jsx";
 import FormSaveChrome from "./FormSaveChrome.jsx";
+import RichTextEditor from "./RichTextEditor.jsx";
 import { normalizeListingDatetime } from "./listingDateUtils.js";
+
+function ListingFormSection(props) {
+	const { step, title, description, children } = props;
+	return (
+		<section className="listing-form__section">
+			<header className="listing-form__section-head">
+				{step != null ? (
+					<span className="listing-form__step" aria-hidden>
+						{step}
+					</span>
+				) : null}
+				<div className="listing-form__section-copy">
+					<h3 className="listing-form__section-title">{title}</h3>
+					{description ? (
+						<p className="listing-form__section-desc">{description}</p>
+					) : null}
+				</div>
+			</header>
+			<div className="listing-form__section-body">{children}</div>
+		</section>
+	);
+}
+
+function ListingFormTabButton(props) {
+	const { active, onClick, label, hint, badge } = props;
+	return (
+		<button
+			type="button"
+			className={`listing-form__tab${active ? " is-active" : ""}`}
+			onClick={onClick}
+			aria-pressed={active}
+		>
+			<span className="listing-form__tab-label">{label}</span>
+			{hint ? <span className="listing-form__tab-hint">{hint}</span> : null}
+			{badge != null && badge !== "" ? (
+				<span className="listing-form__tab-badge">{badge}</span>
+			) : null}
+		</button>
+	);
+}
 
 function toListingMediaUrl(storedPath) {
 	const fileName =
@@ -91,6 +131,7 @@ function buildRecordState(
 				status: "draft",
 				is_featured: false,
 				show_countdown: true,
+				show_sidebar_ads: true,
 			},
 			errors:
 				{},
@@ -136,6 +177,16 @@ function buildRecordState(
 			""
 	) {
 		params.show_countdown = true;
+	}
+	if (
+		params.show_sidebar_ads ===
+			undefined ||
+		params.show_sidebar_ads ===
+			null ||
+		params.show_sidebar_ads ===
+			""
+	) {
+		params.show_sidebar_ads = true;
 	}
 	for (const key of [
 		"publish_at",
@@ -707,6 +758,29 @@ function sanitizeListingFormParams(
 		out.show_countdown = false;
 	}
 	if (
+		out.show_sidebar_ads ===
+			undefined ||
+		out.show_sidebar_ads ===
+			null ||
+		out.show_sidebar_ads ===
+			""
+	) {
+		out.show_sidebar_ads = true;
+	} else if (
+		out.show_sidebar_ads ===
+			true ||
+		out.show_sidebar_ads ===
+			"true" ||
+		out.show_sidebar_ads ===
+			"1" ||
+		out.show_sidebar_ads ===
+			1
+	) {
+		out.show_sidebar_ads = true;
+	} else {
+		out.show_sidebar_ads = false;
+	}
+	if (
 		out.organizer_partner_id ===
 			undefined ||
 		out.organizer_partner_id ===
@@ -741,6 +815,7 @@ const LISTING_SAVE_KEYS = [
 		"status",
 		"is_featured",
 		"show_countdown",
+		"show_sidebar_ads",
 		"publish_at",
 		"unpublish_at",
 	];
@@ -2235,35 +2310,6 @@ function ListingAddPlaceModal(
 	);
 }
 
-function ensureQuillStylesheet() {
-	if (
-		typeof document ===
-		"undefined"
-	)
-		return;
-	const id =
-		"quill-snow-css";
-	if (
-		document.getElementById(
-			id,
-		)
-	)
-		return;
-	const link =
-		document.createElement(
-			"link",
-		);
-	link.id =
-		id;
-	link.rel =
-		"stylesheet";
-	link.href =
-		"https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css";
-	document.head.appendChild(
-		link,
-	);
-}
-
 export default function ListingTabbedForm(
 	props,
 ) {
@@ -2656,7 +2702,11 @@ export default function ListingTabbedForm(
 					p.propertyPath !==
 						"organizer_partner_id" &&
 					p.propertyPath !==
+						"is_featured" &&
+					p.propertyPath !==
 						"show_countdown" &&
+					p.propertyPath !==
+						"show_sidebar_ads" &&
 					p.propertyPath !==
 						"description_html" &&
 					p.propertyPath !==
@@ -2686,10 +2736,6 @@ export default function ListingTabbedForm(
 		propertyPath: "unpublish_at",
 		label: "Unpublish at",
 	};
-
-	useEffect(() => {
-		ensureQuillStylesheet();
-	}, []);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -4680,72 +4726,42 @@ export default function ListingTabbedForm(
 			],
 		);
 
+	const showsCount = Array.isArray(showsPayload?.shows)
+		? showsPayload.shows.length
+		: 0;
+
 	return (
-		<Box variant="white">
-			<H2>
-				{isEdit
-					? "Edit Listing"
-					: "New Listing"}
-			</H2>
-			<Box
-				display="flex"
-				gap="sm"
-				borderBottom="1px solid"
-				borderColor="grey40"
-				mb="xl"
-				flexWrap="wrap"
-			>
-				<Button
-					type="button"
-					variant={
-						activeTab ===
-						"listing"
-							? "contained"
-							: "text"
-					}
-					onClick={() =>
-						setActiveTab(
-							"listing",
-						)
-					}
-				>
-					Listing
-				</Button>
-				<Button
-					type="button"
-					variant={
-						activeTab ===
-						"media"
-							? "contained"
-							: "text"
-					}
-					onClick={() =>
-						setActiveTab(
-							"media",
-						)
-					}
-				>
-					Media
-				</Button>
-				<Button
-					type="button"
-					variant={
-						activeTab ===
-						"shows"
-							? "contained"
-							: "text"
-					}
-					onClick={() =>
-						setActiveTab(
-							"shows",
-						)
-					}
-				>
-					Shows
-					&amp;
-					times
-				</Button>
+		<Box variant="white" className="listing-form">
+			<Box className="listing-form__header" mb="xl">
+				<H2 style={{ marginBottom: 6 }}>
+					{isEdit ? "Edit Listing" : "New Listing"}
+				</H2>
+				<Text variant="sm" color="grey60">
+					Work through the tabs below. Save anytime — Details, Media, and Showtimes are stored together.
+				</Text>
 			</Box>
+
+			<nav className="listing-form__tabs" aria-label="Listing form sections">
+				<ListingFormTabButton
+					active={activeTab === "listing"}
+					onClick={() => setActiveTab("listing")}
+					label="1. Details"
+					hint="Basics, schedule, description"
+				/>
+				<ListingFormTabButton
+					active={activeTab === "media"}
+					onClick={() => setActiveTab("media")}
+					label="2. Media"
+					hint="Images, trailer, gallery"
+				/>
+				<ListingFormTabButton
+					active={activeTab === "shows"}
+					onClick={() => setActiveTab("shows")}
+					label="3. Showtimes"
+					hint="Places, dates & times"
+					badge={showsCount > 0 ? String(showsCount) : null}
+				/>
+			</nav>
 
 			<FormSaveChrome
 				onSave={onSave}
@@ -4755,38 +4771,168 @@ export default function ListingTabbedForm(
 			>
 			{activeTab ===
 			"listing" ? (
-				<Box mt="xl">
-					{listingProperties.map(
-						(
-							property,
-						) => (
-							<BasePropertyComponent
-								key={
-									property.propertyPath
-								}
-								where="edit"
-								property={
-									property
-								}
-								resource={
-									resource
-								}
-								record={
-									record
-								}
-								onChange={
-									handleListingFieldChange
-								}
-							/>
-						),
-					)}
+				<Box className="listing-form__panels" mt="lg">
+					<ListingFormSection
+						step={1}
+						title="Basics"
+						description="Type, title, slug, status, and featured flag for this listing."
+					>
+						<div className="listing-form__fields">
+							{listingProperties.map((property) => (
+								<BasePropertyComponent
+									key={property.propertyPath}
+									where="edit"
+									property={property}
+									resource={resource}
+									record={record}
+									onChange={handleListingFieldChange}
+								/>
+							))}
+						</div>
+					</ListingFormSection>
 
-					<Box mb="xl">
-						<Label mb="sm">Organizer (Partner)</Label>
-						<Text variant="sm" color="grey60" mb="md">
-							Partners from Site settings → Partners slider. Shown as “Organized by” on the listing detail page.
-						</Text>
+					<ListingFormSection
+						step={2}
+						title="Publishing schedule"
+						description="Optional dates that control when this listing appears on the public site."
+					>
+						<Box
+							display="grid"
+							style={{
+								gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+								gap: 20,
+							}}
+						>
+							<ListingPublishDate
+								property={publishAtProperty}
+								record={record}
+								onChange={handleListingFieldChange}
+							/>
+							<ListingUnpublishDate
+								property={unpublishAtProperty}
+								record={record}
+								onChange={handleListingFieldChange}
+							/>
+						</Box>
+					</ListingFormSection>
+
+					<ListingFormSection
+						step={3}
+						title="Detail page display"
+						description="Featured flag and detail-page widgets for this listing."
+					>
+						<Box className="listing-form__toggles listing-form__toggles--row">
+							<div className="listing-form__toggle">
+								<CheckBox
+									id="listing-is-featured"
+									checked={Boolean(
+										record?.params?.is_featured === 1 ||
+											record?.params?.is_featured === "1" ||
+											record?.params?.is_featured === true,
+									)}
+									onChange={(e) =>
+										handleListingFieldChange(
+											"is_featured",
+											e.target.checked ? 1 : 0,
+										)
+									}
+								/>
+								<button
+									type="button"
+									className="listing-form__toggle-label"
+									onClick={() =>
+										handleListingFieldChange(
+											"is_featured",
+											record?.params?.is_featured === 1 ||
+												record?.params?.is_featured === "1" ||
+												record?.params?.is_featured === true
+												? 0
+												: 1,
+										)
+									}
+								>
+									Is Featured
+								</button>
+							</div>
+
+							<div className="listing-form__toggle">
+								<CheckBox
+									id="listing-show-countdown"
+									checked={Boolean(
+										record?.params?.show_countdown === 1 ||
+											record?.params?.show_countdown === "1" ||
+											record?.params?.show_countdown === true,
+									)}
+									onChange={(e) =>
+										handleListingFieldChange(
+											"show_countdown",
+											e.target.checked ? 1 : 0,
+										)
+									}
+								/>
+								<button
+									type="button"
+									className="listing-form__toggle-label"
+									onClick={() =>
+										handleListingFieldChange(
+											"show_countdown",
+											record?.params?.show_countdown === 1 ||
+												record?.params?.show_countdown === "1" ||
+												record?.params?.show_countdown === true
+												? 0
+												: 1,
+										)
+									}
+								>
+									Show countdown box
+								</button>
+							</div>
+
+							<div className="listing-form__toggle">
+								<CheckBox
+									id="listing-show-sidebar-ads"
+									checked={Boolean(
+										record?.params?.show_sidebar_ads === 1 ||
+											record?.params?.show_sidebar_ads === "1" ||
+											record?.params?.show_sidebar_ads === true ||
+											record?.params?.show_sidebar_ads === undefined ||
+											record?.params?.show_sidebar_ads === null ||
+											record?.params?.show_sidebar_ads === "",
+									)}
+									onChange={(e) =>
+										handleListingFieldChange(
+											"show_sidebar_ads",
+											e.target.checked ? 1 : 0,
+										)
+									}
+								/>
+								<button
+									type="button"
+									className="listing-form__toggle-label"
+									onClick={() => {
+										const on =
+											record?.params?.show_sidebar_ads === 1 ||
+											record?.params?.show_sidebar_ads === "1" ||
+											record?.params?.show_sidebar_ads === true ||
+											record?.params?.show_sidebar_ads === undefined ||
+											record?.params?.show_sidebar_ads === null ||
+											record?.params?.show_sidebar_ads === "";
+										handleListingFieldChange("show_sidebar_ads", on ? 0 : 1);
+									}}
+								>
+									Show sidebar Ads
+								</button>
+							</div>
+						</Box>
+					</ListingFormSection>
+
+					<ListingFormSection
+						step={4}
+						title="Organizer"
+						description="Partners from Site settings → Partners. Shown as “Organized by” on the detail page."
+					>
 						<select
+							className="listing-form__select"
 							value={String(record?.params?.organizer_partner_id || "")}
 							onChange={(e) =>
 								handleListingFieldChange(
@@ -4794,16 +4940,6 @@ export default function ListingTabbedForm(
 									e.target.value || null,
 								)
 							}
-							style={{
-								width: "100%",
-								maxWidth: 420,
-								boxSizing: "border-box",
-								padding: "10px 12px",
-								borderRadius: 8,
-								border: "1px solid #d4d4d8",
-								fontSize: 14,
-								background: "#fff",
-							}}
 						>
 							<option value="">— None —</option>
 							{partnerOptions.map((opt) => (
@@ -4813,238 +4949,44 @@ export default function ListingTabbedForm(
 								</option>
 							))}
 						</select>
-					</Box>
+					</ListingFormSection>
 
-					<Box mb="xl">
-						<CheckBox
-							id="listing-show-countdown"
-							checked={Boolean(
-								record?.params?.show_countdown === 1 ||
-									record?.params?.show_countdown === "1" ||
-									record?.params?.show_countdown === true,
-							)}
-							onChange={(e) =>
-								handleListingFieldChange(
-									"show_countdown",
-									e.target.checked ? 1 : 0,
-								)
-							}
-						/>
-						<Label inline htmlFor="listing-show-countdown" ml="default">
-							Show countdown box
-						</Label>
-						<Text variant="sm" color="grey60" mt="sm">
-							When enabled, the event countdown / count-up card appears on the listing detail page (next to the poster).
-						</Text>
-					</Box>
-
-					<Box
-						mt="xl"
-						p="lg"
-						borderRadius="lg"
-						style={{
-							background:
-								"#fff",
-							border: "1px solid rgba(0,0,0,0.06)",
-						}}
+					<ListingFormSection
+						step={5}
+						title="Description"
+						description="Public “About this event” content on the listing detail page."
 					>
-						<Label mb="sm">
-							Publishing
-							schedule
-						</Label>
-						<Text
-							variant="sm"
-							color="grey60"
-							mb="lg"
-						>
-							Optional
-							dates
-							to
-							control
-							when
-							this
-							listing
-							appears
-							on
-							the
-							public
-							site.
-						</Text>
-						<Box
-							display="grid"
-							style={{
-								gridTemplateColumns:
-									"repeat(auto-fit, minmax(240px, 1fr))",
-								gap: 20,
-							}}
-						>
-							<ListingPublishDate
-								property={
-									publishAtProperty
-								}
-								record={
-									record
-								}
-								onChange={
-									handleListingFieldChange
-								}
-							/>
-							<ListingUnpublishDate
-								property={
-									unpublishAtProperty
-								}
-								record={
-									record
-								}
-								onChange={
-									handleListingFieldChange
-								}
-							/>
-						</Box>
-					</Box>
+						<RichTextEditor
+							value={String(record?.params?.description_html || "")}
+							onChange={(html) => handlePropertyChange("description_html", html)}
+							minHeight={280}
+							modeToggle
+						/>
+					</ListingFormSection>
 
-					<Box mt="xl">
-						<Label>
-							Description
-						</Label>
-						<Box
-							mt="sm"
-							style={{
-								minHeight: 300,
-							}}
-						>
-							<ReactQuill
-								theme="snow"
-								value={String(
-									record
-										?.params
-										?.description_html ||
-										"",
-								)}
-								onChange={(
-									html,
-								) =>
-									handlePropertyChange(
-										"description_html",
-										html,
-									)
-								}
-								style={{
-									height: 300,
-								}}
-								modules={{
-									toolbar:
-										[
-											[
-												{
-													header:
-														[
-															1,
-															2,
-															3,
-															false,
-														],
-												},
-											],
-											[
-												"bold",
-												"italic",
-												"underline",
-												"strike",
-											],
-											[
-												{
-													list: "ordered",
-												},
-												{
-													list: "bullet",
-												},
-											],
-											[
-												"blockquote",
-												"code-block",
-											],
-											[
-												"link",
-												"image",
-											],
-											[
-												{
-													color:
-														[],
-												},
-												{
-													background:
-														[],
-												},
-											],
-											[
-												{
-													align:
-														[],
-												},
-											],
-											[
-												"clean",
-											],
-										],
-								}}
-							/>
-						</Box>
-					</Box>
-
-					<Box mt="xxl">
-						<Label>
-							Cast
-						</Label>
+					<ListingFormSection
+						step={6}
+						title="Cast"
+						description="People shown on the listing detail page. Manage profiles under Dashboard → Users → Cast."
+					>
 						<Box
 							display="flex"
 							gap="sm"
 							alignItems="flex-end"
 							flexWrap="nowrap"
 						>
-							<Box
-								flex={
-									1
-								}
-								style={{
-									minWidth: 0,
-								}}
-							>
+							<Box flex={1} style={{ minWidth: 0 }}>
 								<Select
 									isMulti
-									isLoading={
-										isCastsLoading
-									}
-									options={
-										castOptions
-									}
+									isLoading={isCastsLoading}
+									options={castOptions}
 									placeholder="Search & select cast…"
-									value={castOptions.filter(
-										(
-											o,
-										) =>
-											selectedCastIds.includes(
-												String(
-													o.value,
-												),
-											),
+									value={castOptions.filter((o) =>
+										selectedCastIds.includes(String(o.value)),
 									)}
-									onChange={(
-										opts,
-									) =>
+									onChange={(opts) =>
 										setSelectedCastIds(
-											(
-												opts ||
-												[]
-											).map(
-												(
-													o,
-												) =>
-													String(
-														o.value,
-													),
-											),
+											(opts || []).map((o) => String(o.value)),
 										)
 									}
 								/>
@@ -5054,54 +4996,22 @@ export default function ListingTabbedForm(
 								variant="text"
 								size="sm"
 								title="Add new cast"
-								onClick={() =>
-									setCastModalOpen(
-										true,
-									)
-								}
-								style={{
-									flexShrink: 0,
-									paddingLeft: 8,
-									paddingRight: 8,
-								}}
+								onClick={() => setCastModalOpen(true)}
+								style={{ flexShrink: 0, paddingLeft: 8, paddingRight: 8 }}
 							>
-								<Icon
-									icon="Plus"
-									size={
-										22
-									}
-								/>
+								<Icon icon="Plus" size={22} />
 							</Button>
 						</Box>
-						<Text
-							variant="sm"
-							color="grey60"
-							mt="sm"
-						>
-							Tip:
-							Manage
-							cast
-							profiles
-							in
-							Dashboard
-							→
-							Users
-							→
-							Cast.
-						</Text>
-					</Box>
+					</ListingFormSection>
 				</Box>
 			) : activeTab ===
 			  "media" ? (
-				<Box mt="xl">
-					<Text
-						variant="sm"
-						color="grey60"
-						mb="xl"
+				<Box className="listing-form__panels" mt="lg">
+					<ListingFormSection
+						step={2}
+						title="Posters & banners"
+						description="Upload images for cards, the detail hero, and optional sponsor placement. Drag and drop or click to browse."
 					>
-						Upload banner images and gallery photos. Drag and drop files or click each zone to browse.
-					</Text>
-
 					<Box
 						display="grid"
 						style={{
@@ -5121,7 +5031,7 @@ export default function ListingTabbedForm(
 						>
 							<ImageDropzone
 								label="Banner image"
-								hint="Used on listing cards. Max 4MB."
+								hint="Recommended size: 800×1200 px (portrait 2:3). Used on listing cards. Max 4MB."
 								previewUrl={toListingMediaUrl(
 									record
 										?.params
@@ -5162,7 +5072,7 @@ export default function ListingTabbedForm(
 						>
 							<ImageDropzone
 								label="Detail page banner (wide)"
-								hint="Hero image on the listing detail page. Max 4MB."
+								hint="Recommended size: 1920×820 px (≈21:9 wide). Hero image on the listing detail page. Max 4MB."
 								previewUrl={toListingMediaUrl(
 									record
 										?.params
@@ -5192,20 +5102,13 @@ export default function ListingTabbedForm(
 							/>
 						</Box>
 					</Box>
+					</ListingFormSection>
 
-					<Box
-						mt="xl"
-						p="lg"
-						borderRadius="lg"
-						style={{
-							background: "#fff",
-							border: "1px solid rgba(0,0,0,0.06)",
-						}}
+					<ListingFormSection
+						step={3}
+						title="Sponsor banner"
+						description="Optional ad at the top of the listing detail right column. Link opens in a new tab. Recommended size: 600×600 px (square) or 800×450 px (16:9). Max 4MB."
 					>
-						<Label mb="sm">Sponsor banner</Label>
-						<Text variant="sm" color="grey60" mb="lg">
-							Shown at the top of the listing detail right column. Optional link opens in a new tab.
-						</Text>
 						<Box
 							display="grid"
 							style={{
@@ -5216,7 +5119,7 @@ export default function ListingTabbedForm(
 						>
 							<ImageDropzone
 								label="Sponsor banner image"
-								hint="Max 4MB. Recommended wide or square ad format."
+								hint="Recommended size: 600×600 px (square) or 800×450 px (16:9). Max 4MB."
 								previewUrl={toListingMediaUrl(
 									record?.params?.sponsor_banner_image,
 								)}
@@ -5252,21 +5155,13 @@ export default function ListingTabbedForm(
 								</Text>
 							</Box>
 						</Box>
-					</Box>
+					</ListingFormSection>
 
-					<Box
-						mt="xl"
-						p="lg"
-						borderRadius="lg"
-						style={{
-							background:
-								"#fff",
-							border: "1px solid rgba(0,0,0,0.06)",
-						}}
+					<ListingFormSection
+						step={4}
+						title="Trailer"
+						description="YouTube (or similar) URL shown on the listing detail page."
 					>
-						<Label>
-							Trailer URL
-						</Label>
 						<Input
 							value={
 								record
@@ -5286,31 +5181,19 @@ export default function ListingTabbedForm(
 							}
 							placeholder="https://youtube.com/watch?v=..."
 						/>
-					</Box>
+					</ListingFormSection>
 
-					<Box
-						mt="xl"
-						p="lg"
-						borderRadius="lg"
-						style={{
-							background:
-								"#fff",
-							border: "1px solid rgba(0,0,0,0.06)",
-						}}
+					<ListingFormSection
+						step={5}
+						title="Gallery"
+						description="Extra photos for the detail page. Up to 10 images, 4MB each. Recommended size: 1200×900 px (4:3)."
 					>
 						<Box
 							display="flex"
-							justifyContent="space-between"
+							justifyContent="flex-end"
 							alignItems="center"
-							flexWrap="wrap"
-							style={{
-								gap: 12,
-							}}
 							mb="md"
 						>
-							<Label mb="0">
-								Gallery images
-							</Label>
 							<Text
 								variant="sm"
 								color="grey60"
@@ -5326,7 +5209,7 @@ export default function ListingTabbedForm(
 						</Box>
 
 						<ImageDropzone
-							hint="Add up to 10 images, 4MB each. Drop multiple files at once."
+							hint="Add up to 10 images, 4MB each. Recommended size: 1200×900 px (4:3). Drop multiple files at once."
 							multiple
 							compact
 							uploading={
@@ -5442,26 +5325,22 @@ export default function ListingTabbedForm(
 								)}
 							</Box>
 						) : null}
-					</Box>
+					</ListingFormSection>
 				</Box>
 			) : (
-				<Box mt="xl">
-					<Text
-						variant="sm"
+				<Box className="listing-form__panels" mt="lg">
+					<ListingFormSection
+						step={3}
+						title="Showtimes"
+						description="Add each venue and date as a show. Search when the list is long — everything saves with the listing."
+					>
+					<Box
+						display="flex"
+						gap="md"
+						alignItems="flex-end"
+						flexWrap="wrap"
 						mb="lg"
 					>
-						Shows
-						and
-						show
-						times
-						are
-						saved
-						together
-						with
-						the
-						listing.
-					</Text>
-
 					<Button
 						type="button"
 						variant="primary"
@@ -5480,8 +5359,11 @@ export default function ListingTabbedForm(
 						.length >
 					0 ? (
 						<Box
-							mt="lg"
-							maxWidth={480}
+							flex={1}
+							style={{
+								minWidth: 220,
+								maxWidth: 420,
+							}}
 						>
 							<Label>
 								Quick
@@ -5524,6 +5406,7 @@ export default function ListingTabbedForm(
 							) : null}
 						</Box>
 					) : null}
+					</Box>
 
 					{(
 						showsPayload?.shows ||
@@ -5531,23 +5414,16 @@ export default function ListingTabbedForm(
 					)
 						.length ===
 					0 ? (
-						<Box mt="xl">
+						<Box className="listing-form__empty" mt="lg">
 							<Text>
-								No
-								shows
-								added
-								yet.
+								No shows yet. Click <strong>Add show</strong> to attach a place and showtimes.
 							</Text>
 						</Box>
 					) : filteredShows.length ===
 					  0 ? (
-						<Box mt="xl">
+						<Box className="listing-form__empty" mt="lg">
 							<Text>
-								No
-								shows
-								match
-								your
-								search.
+								No shows match your search.
 							</Text>
 						</Box>
 					) : null}
@@ -6069,6 +5945,7 @@ export default function ListingTabbedForm(
 							);
 						},
 					)}
+					</ListingFormSection>
 				</Box>
 			)}
 			</FormSaveChrome>

@@ -907,6 +907,7 @@ if ($method === 'GET' && preg_match('#^/listings/([^/]+)$#', $path, $m)) {
   $organizer = resolve_partner_organizer($pdo, $listing['organizer_partner_id'] ?? null);
   unset($listing['organizer_partner_id']);
   $listing['show_countdown'] = ((int)($listing['show_countdown'] ?? 1) === 1) ? 1 : 0;
+  $listing['show_sidebar_ads'] = ((int)($listing['show_sidebar_ads'] ?? 1) === 1) ? 1 : 0;
   $sponsorImage = trim((string)($listing['sponsor_banner_image'] ?? ''));
   $sponsorUrl = trim((string)($listing['sponsor_banner_url'] ?? ''));
   $listing['sponsor_banner_image'] = $sponsorImage !== '' ? $sponsorImage : null;

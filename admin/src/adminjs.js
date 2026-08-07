@@ -376,6 +376,21 @@ export async function buildAdminJs() {
       } else {
         obj.show_countdown = 0
       }
+      if (
+        !Object.prototype.hasOwnProperty.call(obj, 'show_sidebar_ads') ||
+        listingEmptyFormValue(obj.show_sidebar_ads)
+      ) {
+        obj.show_sidebar_ads = 1
+      } else if (
+        obj.show_sidebar_ads === true ||
+        obj.show_sidebar_ads === 'true' ||
+        obj.show_sidebar_ads === '1' ||
+        obj.show_sidebar_ads === 1
+      ) {
+        obj.show_sidebar_ads = 1
+      } else {
+        obj.show_sidebar_ads = 0
+      }
     }
 
     normalize(request.payload)
@@ -871,7 +886,7 @@ export async function buildAdminJs() {
       const [srcRows] = await conn.execute(
         `
           SELECT type_id, title, slug, description_html, banner_image, detail_banner_image, trailer_url,
-                 organizer_partner_id, show_countdown, sponsor_banner_image, sponsor_banner_url,
+                 organizer_partner_id, show_countdown, show_sidebar_ads, sponsor_banner_image, sponsor_banner_url,
                  status, publish_at, unpublish_at
           FROM listings WHERE id = ?
         `,
@@ -889,10 +904,10 @@ export async function buildAdminJs() {
         `
           INSERT INTO listings
             (type_id, title, slug, description_html, banner_image, detail_banner_image, trailer_url,
-             organizer_partner_id, show_countdown, sponsor_banner_image, sponsor_banner_url,
+             organizer_partner_id, show_countdown, show_sidebar_ads, sponsor_banner_image, sponsor_banner_url,
              status, publish_at, unpublish_at, created_by_admin_id, updated_by_admin_id,
              created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         [
           src.type_id,
@@ -904,6 +919,7 @@ export async function buildAdminJs() {
           src.trailer_url,
           src.organizer_partner_id ?? null,
           src.show_countdown == null ? 1 : Number(src.show_countdown) ? 1 : 0,
+          src.show_sidebar_ads == null ? 1 : Number(src.show_sidebar_ads) ? 1 : 0,
           src.sponsor_banner_image ?? null,
           src.sponsor_banner_url ?? null,
           src.status,
@@ -1273,6 +1289,12 @@ export async function buildAdminJs() {
               isRequired: false,
               isVisible: { list: false, filter: false, show: true, edit: false, new: false },
               props: { label: 'Show countdown box' },
+            },
+            show_sidebar_ads: {
+              type: 'boolean',
+              isRequired: false,
+              isVisible: { list: false, filter: false, show: true, edit: false, new: false },
+              props: { label: 'Show sidebar Ads' },
             },
             organizer_partner_id: {
               type: 'string',
