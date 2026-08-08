@@ -4,6 +4,7 @@ export const ADMIN_PERMISSION_GROUPS = [
     id: 'site',
     label: 'Site settings',
     permissions: [
+      { key: 'pages.general', label: 'General settings' },
       { key: 'pages.sliderBanner', label: 'Slider & banner settings' },
       { key: 'pages.homeListings', label: 'Homepage listings settings' },
       { key: 'pages.footer', label: 'Footer settings' },

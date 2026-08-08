@@ -9,6 +9,7 @@ const SITE_SETTINGS_GROUP_ID = 'site-settings'
 const SIDEBAR_STORAGE_KEY = 'sidebarElements'
 
 const PAGE_ICONS = {
+  general: 'Settings',
   sliderBanner: 'Slideshow',
   homeListings: 'ViewList',
   footer: 'Menu',

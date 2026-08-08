@@ -5,6 +5,7 @@ import { mergeHeaderSettings } from './headerSettings.shared.js'
 import { mergePartnersSettings } from './partnersSettings.shared.js'
 import { mergeAdsSettings } from './adsSettings.shared.js'
 import { mergeYoutubeCarouselSettings } from './youtubeCarouselSettings.shared.js'
+import { mergeGeneralSettings } from './generalSettings.shared.js'
 
 function readFieldValue(field, el) {
   if (!el) return undefined
@@ -71,4 +72,8 @@ export function readAdsFormValues(formEl, fieldGroups) {
 
 export function readYoutubeCarouselFormValues(formEl, fieldGroups) {
   return readSettingsFormValues(formEl, fieldGroups, mergeYoutubeCarouselSettings)
+}
+
+export function readGeneralFormValues(formEl, fieldGroups) {
+  return readSettingsFormValues(formEl, fieldGroups, mergeGeneralSettings)
 }

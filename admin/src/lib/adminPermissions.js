@@ -96,6 +96,8 @@ export function canAccessPage(admin, pageKey) {
 
 export function canAccessSiteSettingsSection(admin, sectionId) {
   switch (sectionId) {
+    case 'general':
+      return canAny(admin, ['pages.general', 'pages.homeListings', 'pages.sliderBanner'])
     case 'sliderBanner':
       return canAccessPage(admin, 'sliderBanner')
     case 'homeListings':

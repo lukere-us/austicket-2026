@@ -16,6 +16,7 @@ import {
   fetchRolePermissionKeys,
   isMainAdminRoleName,
 } from './lib/rolePermissions.server.js'
+import { applyPasswordHashBefore, passwordPropertyOptions } from './lib/accountPassword.js'
 
 AdminJS.registerAdapter({ Database, Resource })
 
@@ -111,6 +112,10 @@ export async function buildAdminJs() {
     YoutubeCarouselSettings: componentLoader.add(
       'YoutubeCarouselSettings',
       path.join(__dirname, 'components', 'YoutubeCarouselSettings.jsx')
+    ),
+    GeneralSettings: componentLoader.add(
+      'GeneralSettings',
+      path.join(__dirname, 'components', 'GeneralSettings.jsx')
     ),
     BlogCoverUpload: componentLoader.add(
       'BlogCoverUpload',
@@ -390,6 +395,15 @@ export async function buildAdminJs() {
         obj.show_sidebar_ads = 1
       } else {
         obj.show_sidebar_ads = 0
+      }
+      for (const key of ['show_rating', 'show_ratings_comments']) {
+        if (!Object.prototype.hasOwnProperty.call(obj, key) || listingEmptyFormValue(obj[key])) {
+          obj[key] = 1
+        } else if (obj[key] === true || obj[key] === 'true' || obj[key] === '1' || obj[key] === 1) {
+          obj[key] = 1
+        } else {
+          obj[key] = 0
+        }
       }
     }
 
@@ -886,7 +900,8 @@ export async function buildAdminJs() {
       const [srcRows] = await conn.execute(
         `
           SELECT type_id, title, slug, description_html, banner_image, detail_banner_image, trailer_url,
-                 organizer_partner_id, show_countdown, show_sidebar_ads, sponsor_banner_image, sponsor_banner_url,
+                 organizer_partner_id, show_countdown, show_sidebar_ads, show_rating, show_ratings_comments,
+                 sponsor_banner_image, sponsor_banner_url,
                  status, publish_at, unpublish_at
           FROM listings WHERE id = ?
         `,
@@ -904,10 +919,11 @@ export async function buildAdminJs() {
         `
           INSERT INTO listings
             (type_id, title, slug, description_html, banner_image, detail_banner_image, trailer_url,
-             organizer_partner_id, show_countdown, show_sidebar_ads, sponsor_banner_image, sponsor_banner_url,
+             organizer_partner_id, show_countdown, show_sidebar_ads, show_rating, show_ratings_comments,
+             sponsor_banner_image, sponsor_banner_url,
              status, publish_at, unpublish_at, created_by_admin_id, updated_by_admin_id,
              created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         [
           src.type_id,
@@ -920,6 +936,8 @@ export async function buildAdminJs() {
           src.organizer_partner_id ?? null,
           src.show_countdown == null ? 1 : Number(src.show_countdown) ? 1 : 0,
           src.show_sidebar_ads == null ? 1 : Number(src.show_sidebar_ads) ? 1 : 0,
+          src.show_rating == null ? 1 : Number(src.show_rating) ? 1 : 0,
+          src.show_ratings_comments == null ? 1 : Number(src.show_ratings_comments) ? 1 : 0,
           src.sponsor_banner_image ?? null,
           src.sponsor_banner_url ?? null,
           src.status,
@@ -1044,6 +1062,7 @@ export async function buildAdminJs() {
             admin_role_permissions: 'Role permissions (legacy)',
           },
           pages: {
+            general: 'General',
             sliderBanner: 'Slider & Banner',
             homeListings: 'Homepage listings',
             footer: 'Footer settings',
@@ -1090,6 +1109,12 @@ export async function buildAdminJs() {
     },
     componentLoader,
     pages: {
+      general: {
+        icon: 'Settings',
+        component: Components.GeneralSettings,
+        isAccessible: ({ currentAdmin }) =>
+          canAny(currentAdmin, ['pages.general', 'pages.homeListings', 'pages.sliderBanner']),
+      },
       sliderBanner: {
         icon: 'Slideshow',
         component: Components.SliderBannerSettings,
@@ -1140,14 +1165,31 @@ export async function buildAdminJs() {
       res('admins', {
         navigation: { name: 'Admin', icon: 'User' },
         listProperties: ['name', 'email', 'role_id', 'is_active'],
+        editProperties: ['name', 'email', 'password', 'role_id', 'is_active'],
+        newProperties: ['name', 'email', 'password', 'role_id', 'is_active'],
         properties: {
           password_hash: { isVisible: false },
+          password: {
+            ...passwordPropertyOptions(),
+            description: 'Required when creating. On edit, leave blank to keep the current password.',
+            props: {
+              placeholder: 'Min 6 characters',
+            },
+          },
           created_at: { isVisible: false },
           updated_at: { isVisible: false },
           is_active: { type: 'boolean' },
           role_id: {
             availableValues: adminRoleChoices,
             isRequired: true,
+          },
+        },
+        actions: {
+          new: {
+            before: async (request) => applyPasswordHashBefore(request, { requirePassword: true }),
+          },
+          edit: {
+            before: async (request) => applyPasswordHashBefore(request, { requirePassword: false }),
           },
         },
       }),
@@ -1204,11 +1246,28 @@ export async function buildAdminJs() {
       resHidden('admin_role_permissions'),
       res('users', {
         navigation: { name: 'Users', icon: 'User' },
+        editProperties: ['name', 'email', 'password', 'is_blocked'],
+        newProperties: ['name', 'email', 'password', 'is_blocked'],
         properties: {
           password_hash: { isVisible: false },
+          password: {
+            ...passwordPropertyOptions(),
+            description: 'Required when creating. On edit, leave blank to keep the current password.',
+            props: {
+              placeholder: 'Min 6 characters',
+            },
+          },
           is_blocked: { type: 'boolean' },
           created_at: { isVisible: false },
           updated_at: { isVisible: false },
+        },
+        actions: {
+          new: {
+            before: async (request) => applyPasswordHashBefore(request, { requirePassword: true }),
+          },
+          edit: {
+            before: async (request) => applyPasswordHashBefore(request, { requirePassword: false }),
+          },
         },
       }),
       res('casts', {
@@ -1295,6 +1354,18 @@ export async function buildAdminJs() {
               isRequired: false,
               isVisible: { list: false, filter: false, show: true, edit: false, new: false },
               props: { label: 'Show sidebar Ads' },
+            },
+            show_rating: {
+              type: 'boolean',
+              isRequired: false,
+              isVisible: { list: false, filter: false, show: true, edit: false, new: false },
+              props: { label: 'Show Rating' },
+            },
+            show_ratings_comments: {
+              type: 'boolean',
+              isRequired: false,
+              isVisible: { list: false, filter: false, show: true, edit: false, new: false },
+              props: { label: 'Show Ratings & comments' },
             },
             organizer_partner_id: {
               type: 'string',

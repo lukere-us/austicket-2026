@@ -19,6 +19,7 @@ import { ensureCmsPagesSchema } from './lib/ensureCmsPagesSchema.js'
 import { ensureListingsOrganizer } from './lib/ensureListingsOrganizer.js'
 import { ensureListingsShowCountdown } from './lib/ensureListingsShowCountdown.js'
 import { ensureListingsShowSidebarAds } from './lib/ensureListingsShowSidebarAds.js'
+import { ensureListingsRatingDisplay } from './lib/ensureListingsRatingDisplay.js'
 import { ensureListingsSponsorBanner } from './lib/ensureListingsSponsorBanner.js'
 import { ensurePageVisitsVisitedAt } from './lib/ensurePageVisitsVisitedAt.js'
 import { ensureMainAdminPermissions } from './lib/ensureMainAdminPermissions.js'
@@ -39,6 +40,11 @@ import {
   loadFooterCityOptions,
   saveFooterSettings,
 } from './lib/footerSettings.js'
+import {
+  generalSettingFields,
+  loadGeneralSettings,
+  saveGeneralSettings,
+} from './lib/generalSettings.js'
 import {
   headerSettingFields,
   loadHeaderSettings,
@@ -156,6 +162,7 @@ async function start() {
   await ensureListingsOrganizer(dbPool())
   await ensureListingsShowCountdown(dbPool())
   await ensureListingsShowSidebarAds(dbPool())
+  await ensureListingsRatingDisplay(dbPool())
   await ensureListingsSponsorBanner(dbPool())
   await ensurePageVisitsVisitedAt(dbPool())
   await ensureMainAdminPermissions(dbPool())
@@ -757,6 +764,32 @@ async function start() {
   // Settings API lives outside AdminJS formidable router so JSON bodies parse correctly.
   const settingsApi = express.Router()
   settingsApi.use(express.json({ limit: '256kb' }))
+
+  settingsApi.get('/general', requireAnyPermission('pages.general', 'pages.homeListings', 'pages.sliderBanner'), async (_req, res) => {
+    try {
+      const pool = dbPool()
+      jsonNoCache(res, {
+        settings: await loadGeneralSettings(pool),
+        fields: generalSettingFields(),
+      })
+    } catch (e) {
+      res.status(500).json({ error: e?.message || String(e) })
+    }
+  })
+
+  settingsApi.post('/general', requireAnyPermission('pages.general', 'pages.homeListings', 'pages.sliderBanner'), async (req, res) => {
+    try {
+      const pool = dbPool()
+      const settings = await saveGeneralSettings(pool, parseSettingsBody(req))
+      jsonNoCache(res, {
+        settings,
+        fields: generalSettingFields(),
+        notice: { message: 'General settings saved.', type: 'success' },
+      })
+    } catch (e) {
+      res.status(500).json({ error: e?.message || String(e) })
+    }
+  })
 
   settingsApi.get('/home-hero', requirePermission('pages.sliderBanner'), async (_req, res) => {
     try {

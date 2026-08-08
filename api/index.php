@@ -15,6 +15,7 @@ require_once __DIR__ . '/lib/header_settings.php';
 require_once __DIR__ . '/lib/partners_settings.php';
 require_once __DIR__ . '/lib/ads_settings.php';
 require_once __DIR__ . '/lib/youtube_carousel_settings.php';
+require_once __DIR__ . '/lib/general_settings.php';
 require_once __DIR__ . '/lib/blogs.php';
 require_once __DIR__ . '/lib/cms_pages.php';
 require_once __DIR__ . '/lib/home_hero_stats.php';
@@ -908,6 +909,8 @@ if ($method === 'GET' && preg_match('#^/listings/([^/]+)$#', $path, $m)) {
   unset($listing['organizer_partner_id']);
   $listing['show_countdown'] = ((int)($listing['show_countdown'] ?? 1) === 1) ? 1 : 0;
   $listing['show_sidebar_ads'] = ((int)($listing['show_sidebar_ads'] ?? 1) === 1) ? 1 : 0;
+  $listing['show_rating'] = ((int)($listing['show_rating'] ?? 1) === 1) ? 1 : 0;
+  $listing['show_ratings_comments'] = ((int)($listing['show_ratings_comments'] ?? 1) === 1) ? 1 : 0;
   $sponsorImage = trim((string)($listing['sponsor_banner_image'] ?? ''));
   $sponsorUrl = trim((string)($listing['sponsor_banner_url'] ?? ''));
   $listing['sponsor_banner_image'] = $sponsorImage !== '' ? $sponsorImage : null;
@@ -1484,6 +1487,13 @@ if ($method === 'GET' && $path === '/settings/youtube-carousel') {
   header('Pragma: no-cache');
   $pdo = db();
   json_response(['settings' => load_youtube_carousel_settings($pdo)]);
+}
+
+if ($method === 'GET' && $path === '/settings/general') {
+  header('Cache-Control: no-store, no-cache, must-revalidate');
+  header('Pragma: no-cache');
+  $pdo = db();
+  json_response(['settings' => load_general_settings($pdo)]);
 }
 
 if ($method === 'GET' && $path === '/blogs/home') {

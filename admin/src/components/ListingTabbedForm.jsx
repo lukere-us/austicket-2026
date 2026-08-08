@@ -34,6 +34,18 @@ import FormSaveChrome from "./FormSaveChrome.jsx";
 import RichTextEditor from "./RichTextEditor.jsx";
 import { normalizeListingDatetime } from "./listingDateUtils.js";
 
+function listingFlagOn(value, defaultOn = true) {
+	if (value === undefined || value === null || value === "") {
+		return defaultOn;
+	}
+	return (
+		value === 1 ||
+		value === "1" ||
+		value === true ||
+		value === "true"
+	);
+}
+
 function ListingFormSection(props) {
 	const { step, title, description, children } = props;
 	return (
@@ -132,6 +144,8 @@ function buildRecordState(
 				is_featured: false,
 				show_countdown: true,
 				show_sidebar_ads: true,
+				show_rating: true,
+				show_ratings_comments: true,
 			},
 			errors:
 				{},
@@ -187,6 +201,26 @@ function buildRecordState(
 			""
 	) {
 		params.show_sidebar_ads = true;
+	}
+	if (
+		params.show_rating ===
+			undefined ||
+		params.show_rating ===
+			null ||
+		params.show_rating ===
+			""
+	) {
+		params.show_rating = true;
+	}
+	if (
+		params.show_ratings_comments ===
+			undefined ||
+		params.show_ratings_comments ===
+			null ||
+		params.show_ratings_comments ===
+			""
+	) {
+		params.show_ratings_comments = true;
 	}
 	for (const key of [
 		"publish_at",
@@ -781,6 +815,52 @@ function sanitizeListingFormParams(
 		out.show_sidebar_ads = false;
 	}
 	if (
+		out.show_rating ===
+			undefined ||
+		out.show_rating ===
+			null ||
+		out.show_rating ===
+			""
+	) {
+		out.show_rating = true;
+	} else if (
+		out.show_rating ===
+			true ||
+		out.show_rating ===
+			"true" ||
+		out.show_rating ===
+			"1" ||
+		out.show_rating ===
+			1
+	) {
+		out.show_rating = true;
+	} else {
+		out.show_rating = false;
+	}
+	if (
+		out.show_ratings_comments ===
+			undefined ||
+		out.show_ratings_comments ===
+			null ||
+		out.show_ratings_comments ===
+			""
+	) {
+		out.show_ratings_comments = true;
+	} else if (
+		out.show_ratings_comments ===
+			true ||
+		out.show_ratings_comments ===
+			"true" ||
+		out.show_ratings_comments ===
+			"1" ||
+		out.show_ratings_comments ===
+			1
+	) {
+		out.show_ratings_comments = true;
+	} else {
+		out.show_ratings_comments = false;
+	}
+	if (
 		out.organizer_partner_id ===
 			undefined ||
 		out.organizer_partner_id ===
@@ -816,6 +896,8 @@ const LISTING_SAVE_KEYS = [
 		"is_featured",
 		"show_countdown",
 		"show_sidebar_ads",
+		"show_rating",
+		"show_ratings_comments",
 		"publish_at",
 		"unpublish_at",
 	];
@@ -2707,6 +2789,10 @@ export default function ListingTabbedForm(
 						"show_countdown" &&
 					p.propertyPath !==
 						"show_sidebar_ads" &&
+					p.propertyPath !==
+						"show_rating" &&
+					p.propertyPath !==
+						"show_ratings_comments" &&
 					p.propertyPath !==
 						"description_html" &&
 					p.propertyPath !==
@@ -4822,107 +4908,69 @@ export default function ListingTabbedForm(
 						description="Featured flag and detail-page widgets for this listing."
 					>
 						<Box className="listing-form__toggles listing-form__toggles--row">
-							<div className="listing-form__toggle">
-								<CheckBox
-									id="listing-is-featured"
-									checked={Boolean(
-										record?.params?.is_featured === 1 ||
-											record?.params?.is_featured === "1" ||
-											record?.params?.is_featured === true,
-									)}
-									onChange={(e) =>
-										handleListingFieldChange(
-											"is_featured",
-											e.target.checked ? 1 : 0,
-										)
-									}
-								/>
-								<button
-									type="button"
-									className="listing-form__toggle-label"
-									onClick={() =>
-										handleListingFieldChange(
-											"is_featured",
-											record?.params?.is_featured === 1 ||
-												record?.params?.is_featured === "1" ||
-												record?.params?.is_featured === true
-												? 0
-												: 1,
-										)
-									}
-								>
-									Is Featured
-								</button>
-							</div>
-
-							<div className="listing-form__toggle">
-								<CheckBox
-									id="listing-show-countdown"
-									checked={Boolean(
-										record?.params?.show_countdown === 1 ||
-											record?.params?.show_countdown === "1" ||
-											record?.params?.show_countdown === true,
-									)}
-									onChange={(e) =>
-										handleListingFieldChange(
-											"show_countdown",
-											e.target.checked ? 1 : 0,
-										)
-									}
-								/>
-								<button
-									type="button"
-									className="listing-form__toggle-label"
-									onClick={() =>
-										handleListingFieldChange(
-											"show_countdown",
-											record?.params?.show_countdown === 1 ||
-												record?.params?.show_countdown === "1" ||
-												record?.params?.show_countdown === true
-												? 0
-												: 1,
-										)
-									}
-								>
-									Show countdown box
-								</button>
-							</div>
-
-							<div className="listing-form__toggle">
-								<CheckBox
-									id="listing-show-sidebar-ads"
-									checked={Boolean(
-										record?.params?.show_sidebar_ads === 1 ||
-											record?.params?.show_sidebar_ads === "1" ||
-											record?.params?.show_sidebar_ads === true ||
-											record?.params?.show_sidebar_ads === undefined ||
-											record?.params?.show_sidebar_ads === null ||
-											record?.params?.show_sidebar_ads === "",
-									)}
-									onChange={(e) =>
-										handleListingFieldChange(
-											"show_sidebar_ads",
-											e.target.checked ? 1 : 0,
-										)
-									}
-								/>
-								<button
-									type="button"
-									className="listing-form__toggle-label"
-									onClick={() => {
-										const on =
-											record?.params?.show_sidebar_ads === 1 ||
-											record?.params?.show_sidebar_ads === "1" ||
-											record?.params?.show_sidebar_ads === true ||
-											record?.params?.show_sidebar_ads === undefined ||
-											record?.params?.show_sidebar_ads === null ||
-											record?.params?.show_sidebar_ads === "";
-										handleListingFieldChange("show_sidebar_ads", on ? 0 : 1);
-									}}
-								>
-									Show sidebar Ads
-								</button>
-							</div>
+							{[
+								{
+									id: "listing-is-featured",
+									key: "is_featured",
+									label: "Is Featured",
+									defaultOn: false,
+								},
+								{
+									id: "listing-show-countdown",
+									key: "show_countdown",
+									label: "Show countdown box",
+									defaultOn: true,
+								},
+								{
+									id: "listing-show-sidebar-ads",
+									key: "show_sidebar_ads",
+									label: "Show sidebar Ads",
+									defaultOn: true,
+								},
+								{
+									id: "listing-show-rating",
+									key: "show_rating",
+									label: "Show Rating",
+									defaultOn: true,
+								},
+								{
+									id: "listing-show-ratings-comments",
+									key: "show_ratings_comments",
+									label: "Show Ratings & comments",
+									defaultOn: true,
+								},
+							].map((toggle) => {
+								const on = listingFlagOn(
+									record?.params?.[toggle.key],
+									toggle.defaultOn,
+								);
+								return (
+									<div className="listing-form__toggle" key={toggle.key}>
+										<CheckBox
+											id={toggle.id}
+											checked={on}
+											onChange={(e) =>
+												handleListingFieldChange(
+													toggle.key,
+													e.target.checked ? 1 : 0,
+												)
+											}
+										/>
+										<button
+											type="button"
+											className="listing-form__toggle-label"
+											onClick={() =>
+												handleListingFieldChange(
+													toggle.key,
+													on ? 0 : 1,
+												)
+											}
+										>
+											{toggle.label}
+										</button>
+									</div>
+								);
+							})}
 						</Box>
 					</ListingFormSection>
 
