@@ -68,6 +68,13 @@ import {
 import { parseSettingsBody } from './lib/parseSettingsBody.js'
 import { can, canAny, loadAdminPermissions } from './lib/adminPermissions.js'
 import { attachAdminSessionRefresh, sessionWithAdminRefresh } from './lib/refreshAdminSession.js'
+import {
+  ADMIN_THEME_COOKIE,
+  ADMIN_THEME_LIGHT,
+  adminThemeCookieOptions,
+  normalizeAdminTheme,
+  readAdminThemeFromCookieHeader,
+} from './lib/adminThemes.js'
 import { ADMIN_PERMISSION_KEYS } from './lib/adminPermissions.shared.js'
 import {
   createRoleWithPermissions,
@@ -118,7 +125,7 @@ async function readUserComponentsBundleOrThrow() {
   throw new Error(`user components bundle not found. Tried: ${tried}`)
 }
 
-async function authenticate(email, password) {
+async function authenticate(email, password, context) {
   const pool = dbPool()
   const [rows] = await pool.execute(
     `
@@ -137,6 +144,8 @@ async function authenticate(email, password) {
   if (!bcrypt.compareSync(String(password), String(admin.password_hash))) return null
 
   const permissions = await loadAdminPermissions(pool, admin.role_id, admin.role_name)
+  const cookieTheme = readAdminThemeFromCookieHeader(context?.req?.headers?.cookie)
+  const theme = cookieTheme || ADMIN_THEME_LIGHT
 
   return {
     id: admin.id,
@@ -145,6 +154,7 @@ async function authenticate(email, password) {
     role: admin.role_name,
     roleId: admin.role_id,
     permissions,
+    theme,
   }
 }
 
@@ -268,12 +278,48 @@ async function start() {
     }
   }
 
+  /** Keep AdminJS `currentAdmin.theme` aligned with cookie preference. */
+  function syncAdminThemeMiddleware(req, res, next) {
+    const admin = req.session?.adminUser
+    if (!admin) return next()
+    const cookieTheme = readAdminThemeFromCookieHeader(req.headers?.cookie)
+    const nextTheme = cookieTheme || normalizeAdminTheme(admin.theme)
+    if (admin.theme !== nextTheme) {
+      req.session.adminUser = { ...admin, theme: nextTheme }
+    }
+    next()
+  }
+
   function jsonNoCache(res, payload) {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
     res.setHeader('Pragma', 'no-cache')
     res.setHeader('Expires', '0')
     res.status(200).type('json').send(JSON.stringify(payload))
   }
+
+  app.post(
+    `${adminJs.options.rootPath}/api/theme`,
+    adminSessionMiddleware,
+    requireAdminApi,
+    express.json({ limit: '16kb' }),
+    (req, res) => {
+      try {
+        const theme = normalizeAdminTheme(req.body?.theme)
+        const admin = { ...(req.session.adminUser || {}), theme }
+        req.session.adminUser = admin
+        res.cookie(ADMIN_THEME_COOKIE, theme, adminThemeCookieOptions())
+        req.session.save((err) => {
+          if (err) {
+            res.status(500).json({ error: err?.message || String(err) })
+            return
+          }
+          jsonNoCache(res, { ok: true, theme, admin })
+        })
+      } catch (e) {
+        res.status(500).json({ error: e?.message || String(e) })
+      }
+    },
+  )
 
   // Upload endpoint for listing media (banner + gallery)
   app.post(
@@ -1058,6 +1104,15 @@ async function start() {
     sessionOptions,
   )
   attachAdminSessionRefresh(adminRouter)
+
+  // Apply preferred theme (cookie) onto session before AdminJS renders pages.
+  {
+    const idx = adminRouter.stack.findIndex((layer) => layer.name === 'session')
+    const insertAt = idx >= 0 ? idx + 2 : 0
+    const themeRouter = express.Router()
+    themeRouter.use(syncAdminThemeMiddleware)
+    adminRouter.stack.splice(insertAt, 0, ...themeRouter.stack)
+  }
 
   app.use(adminJs.options.rootPath, adminRouter)
   app.use(`${adminJs.options.rootPath}/assets`, express.static(path.join(__dirname, '..', 'public', 'assets')))

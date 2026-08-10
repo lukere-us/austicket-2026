@@ -17,6 +17,10 @@ import {
   isMainAdminRoleName,
 } from './lib/rolePermissions.server.js'
 import { applyPasswordHashBefore, passwordPropertyOptions } from './lib/accountPassword.js'
+import {
+  ADMIN_THEME_LIGHT,
+  adminAvailableThemes,
+} from './lib/adminThemes.js'
 
 AdminJS.registerAdapter({ Database, Resource })
 
@@ -1032,7 +1036,10 @@ export async function buildAdminJs() {
   }
 
   componentLoader.override('SidebarPages', path.join(__dirname, 'components', 'SidebarPages.jsx'))
+  componentLoader.override('SidebarResourceSection', path.join(__dirname, 'components', 'SidebarResourceSection.jsx'))
   componentLoader.override('SidebarBranding', path.join(__dirname, 'components', 'AdminSidebarBranding.jsx'))
+  componentLoader.override('SidebarFooter', path.join(__dirname, 'components', 'AdminSidebarFooter.jsx'))
+  componentLoader.override('LoggedIn', path.join(__dirname, 'components', 'AdminLoggedIn.jsx'))
   componentLoader.override('Login', path.join(__dirname, 'components', 'AdminLogin.jsx'))
 
   let brandLogo = null
@@ -1044,6 +1051,8 @@ export async function buildAdminJs() {
 
   const admin = new AdminJS({
     rootPath: '/admin',
+    defaultTheme: ADMIN_THEME_LIGHT,
+    availableThemes: adminAvailableThemes,
     branding: {
       companyName: 'AUS Ticket Lanka',
       ...(brandLogo ? { logo: brandLogo } : {}),
@@ -1077,7 +1086,7 @@ export async function buildAdminJs() {
     },
     assets: {
       styles: ['/admin/assets/react-datepicker.min.css', '/admin/assets/admin-custom.css'],
-      scripts: ['/admin/assets/admin-form-actions.js'],
+      scripts: ['/admin/assets/admin-theme-boot.js', '/admin/assets/admin-form-actions.js'],
     },
     dashboard: {
       component: Components.DashboardTiles,
@@ -1116,12 +1125,12 @@ export async function buildAdminJs() {
           canAny(currentAdmin, ['pages.general', 'pages.homeListings', 'pages.sliderBanner']),
       },
       sliderBanner: {
-        icon: 'Slideshow',
+        icon: 'Sliders',
         component: Components.SliderBannerSettings,
         isAccessible: ({ currentAdmin }) => canAccessPage(currentAdmin, 'sliderBanner'),
       },
       homeListings: {
-        icon: 'ViewList',
+        icon: 'Layout',
         component: Components.HomeListingsSettings,
         isAccessible: ({ currentAdmin }) => canAccessPage(currentAdmin, 'homeListings'),
       },
@@ -1132,38 +1141,38 @@ export async function buildAdminJs() {
           canAny(currentAdmin, ['pages.footer', 'pages.homeListings', 'pages.sliderBanner']),
       },
       header: {
-        icon: 'Settings',
+        icon: 'Navigation',
         component: Components.HeaderSettings,
         isAccessible: ({ currentAdmin }) =>
           canAny(currentAdmin, ['pages.header', 'pages.homeListings', 'pages.sliderBanner']),
       },
       partners: {
-        icon: 'Image',
+        icon: 'Aperture',
         component: Components.PartnersSettings,
         isAccessible: ({ currentAdmin }) =>
           canAny(currentAdmin, ['pages.partners', 'pages.homeListings', 'pages.sliderBanner']),
       },
       ads: {
-        icon: 'Campaign',
+        icon: 'Target',
         component: Components.AdsSettings,
         isAccessible: ({ currentAdmin }) =>
           canAny(currentAdmin, ['pages.ads', 'pages.homeListings', 'pages.sliderBanner']),
       },
       youtubeCarousel: {
-        icon: 'Video',
+        icon: 'Youtube',
         component: Components.YoutubeCarouselSettings,
         isAccessible: ({ currentAdmin }) =>
           canAny(currentAdmin, ['pages.youtubeCarousel', 'pages.homeListings', 'pages.sliderBanner']),
       },
       help: {
-        icon: 'Help',
+        icon: 'HelpCircle',
         component: Components.AdminHelp,
         isAccessible: ({ currentAdmin }) => Boolean(currentAdmin),
       },
     },
     resources: [
       res('admins', {
-        navigation: { name: 'Admin', icon: 'User' },
+        navigation: { name: 'Admin', icon: 'UserCheck' },
         listProperties: ['name', 'email', 'role_id', 'is_active'],
         editProperties: ['name', 'email', 'password', 'role_id', 'is_active'],
         newProperties: ['name', 'email', 'password', 'role_id', 'is_active'],
@@ -1245,7 +1254,7 @@ export async function buildAdminJs() {
       }),
       resHidden('admin_role_permissions'),
       res('users', {
-        navigation: { name: 'Users', icon: 'User' },
+        navigation: { name: 'Users', icon: 'Users' },
         editProperties: ['name', 'email', 'password', 'is_blocked'],
         newProperties: ['name', 'email', 'password', 'is_blocked'],
         properties: {
@@ -1271,7 +1280,7 @@ export async function buildAdminJs() {
         },
       }),
       res('casts', {
-        navigation: { name: 'Users', icon: 'User' },
+        navigation: { name: 'Users', icon: 'Star' },
         sort: { sortBy: 'created_at', direction: 'desc' },
         listProperties: ['image_path', 'name', 'position', 'facebook_url', 'instagram_url', 'tiktok_url', 'wikipedia_url'],
         properties: hideAuditProperties({
@@ -1307,13 +1316,13 @@ export async function buildAdminJs() {
         },
       }),
       res('types', {
-        navigation: { name: 'Content', icon: 'Catalog' },
+        navigation: { name: 'Content', icon: 'Tag' },
         properties: { created_at: { isVisible: false }, updated_at: { isVisible: false } },
       }),
       res(
         'listings',
         {
-          navigation: { name: 'Content', icon: 'Movie' },
+          navigation: { name: 'Content', icon: 'Film' },
           sort: { sortBy: 'created_at', direction: 'desc' },
           listProperties: ['banner_image', 'title', 'slug', 'type_id', 'status', 'publish_at', 'unpublish_at'],
           filterProperties: ['title', 'slug', 'type_id', 'status', 'is_featured', 'publish_at', 'unpublish_at'],
@@ -1565,7 +1574,7 @@ export async function buildAdminJs() {
           },
       }),
       res('blogs', {
-        navigation: { name: 'Content', icon: 'Article' },
+        navigation: { name: 'Content', icon: 'FileText' },
         listProperties: [
           'cover_image',
           'title',
@@ -1674,7 +1683,7 @@ export async function buildAdminJs() {
         },
       }),
       res('cms_pages', {
-        navigation: { name: 'Content', icon: 'Document' },
+        navigation: { name: 'Content', icon: 'BookOpen' },
         listProperties: ['banner_image', 'title', 'slug', 'parent_id', 'status', 'updated_at'],
         editProperties: ['title', 'parent_id', 'banner_image', 'body_html', 'status'],
         newProperties: ['title', 'parent_id', 'banner_image', 'body_html', 'status'],
@@ -1788,7 +1797,7 @@ export async function buildAdminJs() {
         properties: { created_at: { isVisible: false } },
       }),
       res('countries', {
-        navigation: { name: 'Locations', icon: 'Map' },
+        navigation: { name: 'Locations', icon: 'Flag' },
         listProperties: ['flag_image_path', 'name', 'code'],
         properties: {
           flag_image_path: {
@@ -1807,11 +1816,11 @@ export async function buildAdminJs() {
         properties: { created_at: { isVisible: false }, updated_at: { isVisible: false } },
       }),
       res('cities', {
-        navigation: { name: 'Locations', icon: 'Map' },
+        navigation: { name: 'Locations', icon: 'Compass' },
         properties: { created_at: { isVisible: false }, updated_at: { isVisible: false } },
       }),
       res('places', {
-        navigation: { name: 'Locations', icon: 'Pin' },
+        navigation: { name: 'Locations', icon: 'MapPin' },
         listProperties: ['name', 'city_id', 'address', 'google_map_link'],
         properties: {
           name: {
@@ -1863,19 +1872,19 @@ export async function buildAdminJs() {
         },
       }),
       res('comments', {
-        navigation: { name: 'Moderation', icon: 'Chat' },
+        navigation: { name: 'Moderation', icon: 'MessageCircle' },
         properties: { created_at: { isVisible: false }, updated_at: { isVisible: false } },
       }),
       res('ratings', {
-        navigation: { name: 'Moderation', icon: 'Star' },
+        navigation: { name: 'Moderation', icon: 'ThumbsUp' },
         properties: { created_at: { isVisible: false }, updated_at: { isVisible: false } },
       }),
       res('login_events', {
-        navigation: { name: 'Analytics', icon: 'Activity' },
+        navigation: { name: 'Analytics', icon: 'LogIn' },
         properties: { created_at: { isVisible: false } },
       }),
       res('page_visits', {
-        navigation: { name: 'Analytics', icon: 'Activity' },
+        navigation: { name: 'Analytics', icon: 'Eye' },
         sort: { sortBy: 'visited_at', direction: 'desc' },
         listProperties: ['visited_at', 'path', 'listing_id', 'user_id', 'referrer', 'ip_address'],
         properties: {
@@ -1892,14 +1901,14 @@ export async function buildAdminJs() {
         },
       }),
       res('booking_clicks', {
-        navigation: { name: 'Analytics', icon: 'Activity' },
+        navigation: { name: 'Analytics', icon: 'MousePointer' },
         properties: { created_at: { isVisible: false } },
         actions: {
           dailyChart: analyticsDailyChartAction('booking_clicks'),
         },
       }),
       res('refresh_tokens', {
-        navigation: { name: 'Auth', icon: 'Locked' },
+        navigation: { name: 'Auth', icon: 'Key' },
         properties: { created_at: { isVisible: false } },
       }),
     ],

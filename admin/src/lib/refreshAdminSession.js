@@ -33,6 +33,7 @@ export async function refreshAdminSessionUser(req) {
     role: row.role_name,
     roleId: row.role_id,
     permissions,
+    theme: u.theme === 'dark' ? 'dark' : 'light',
   }
 }
 

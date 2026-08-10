@@ -17,7 +17,14 @@ function buildBars(series, chartWidth, chartHeight, padding) {
 }
 
 export function DashboardDailyChart(props) {
-  const { title, subtitle, accent = '#2563eb', series = [], loading = false, viewHref } = props
+  const {
+    title,
+    subtitle,
+    accentClass = 'dashboard-chart--navy',
+    series = [],
+    loading = false,
+    viewHref,
+  } = props
 
   const chartWidth = 420
   const chartHeight = 200
@@ -29,45 +36,28 @@ export function DashboardDailyChart(props) {
   const labelEvery = series.length > 20 ? 5 : series.length > 12 ? 3 : 2
 
   return (
-    <Box
-      p="xl"
-      borderRadius="lg"
-      style={{
-        background: '#fff',
-        border: '1px solid rgba(0,0,0,0.06)',
-        boxShadow: '0 2px 10px rgba(0,0,0,0.04)',
-        minHeight: 280,
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
-      <Box mb="md">
-        <Text style={{ fontWeight: 700, fontSize: 15 }}>{title}</Text>
-        <Text variant="sm" color="grey60" mt="xs">
+    <Box p="xl" borderRadius="lg" className={`dashboard-chart ${accentClass}`}>
+      <Box mb="md" className="dashboard-chart__intro">
+        <Text className="dashboard-chart__title">{title}</Text>
+        <Text className="dashboard-chart__subtitle" mt="xs">
           {loading ? 'Loading…' : subtitle || `Last ${series.length} days · ${total} total`}
         </Text>
         {viewHref ? (
-          <Text variant="sm" mt="xs">
-            <a href={viewHref} style={{ color: accent, textDecoration: 'none', fontWeight: 600 }}>
+          <Text mt="xs">
+            <a href={viewHref} className="dashboard-chart__link">
               View in Analytics →
             </a>
           </Text>
         ) : null}
       </Box>
 
-      <Box flexGrow={1} style={{ minHeight: 200 }}>
+      <Box flexGrow={1} className="dashboard-chart__body">
         {loading ? (
-          <Text color="grey60" variant="sm">
-            Loading chart…
-          </Text>
+          <Text className="dashboard-muted">Loading chart…</Text>
         ) : series.length === 0 ? (
-          <Text color="grey60" variant="sm">
-            No data yet.
-          </Text>
+          <Text className="dashboard-muted">No data yet.</Text>
         ) : total === 0 ? (
-          <Text color="grey60" variant="sm">
-            No visits in the last {series.length} days.
-          </Text>
+          <Text className="dashboard-muted">No visits in the last {series.length} days.</Text>
         ) : (
           <svg
             viewBox={`0 0 ${chartWidth} ${chartHeight}`}
@@ -78,25 +68,25 @@ export function DashboardDailyChart(props) {
             className="dashboard-daily-chart__svg"
           >
             <line
+              className="dashboard-chart__axis"
               x1={padding.left}
               y1={chartHeight - padding.bottom}
               x2={chartWidth - padding.right}
               y2={chartHeight - padding.bottom}
-              stroke="#e4e4e7"
               strokeWidth="1"
             />
             <line
+              className="dashboard-chart__axis"
               x1={padding.left}
               y1={padding.top}
               x2={padding.left}
               y2={chartHeight - padding.bottom}
-              stroke="#e4e4e7"
               strokeWidth="1"
             />
-            <text x={4} y={padding.top + 4} fill="#71717a" fontSize="10">
+            <text className="dashboard-chart__axis-label" x={4} y={padding.top + 4} fontSize="10">
               {maxValue}
             </text>
-            <text x={4} y={chartHeight - padding.bottom} fill="#71717a" fontSize="10">
+            <text className="dashboard-chart__axis-label" x={4} y={chartHeight - padding.bottom} fontSize="10">
               0
             </text>
 
@@ -104,20 +94,20 @@ export function DashboardDailyChart(props) {
               <g key={bar.date}>
                 <title>{`${bar.label}: ${bar.count}`}</title>
                 <rect
+                  className="dashboard-chart__bar"
                   x={bar.x}
                   y={bar.y}
                   width={bar.barW}
                   height={Math.max(bar.barH, bar.count > 0 ? 2 : 0)}
                   rx="2"
-                  fill={accent}
-                  opacity="0.9"
+                  opacity="0.92"
                 />
                 {bar.count > 0 ? (
                   <text
+                    className="dashboard-chart__bar-label"
                     x={bar.x + bar.barW / 2}
                     y={bar.y - 4}
                     textAnchor="middle"
-                    fill="#52525b"
                     fontSize="9"
                   >
                     {bar.count}
@@ -130,9 +120,13 @@ export function DashboardDailyChart(props) {
               index % labelEvery === 0 || index === series.length - 1 ? (
                 <text
                   key={`${item.date}-label`}
-                  x={padding.left + index * ((chartWidth - padding.left - padding.right) / series.length) + 6}
+                  className="dashboard-chart__tick"
+                  x={
+                    padding.left +
+                    index * ((chartWidth - padding.left - padding.right) / series.length) +
+                    6
+                  }
                   y={chartHeight - 8}
-                  fill="#71717a"
                   fontSize="9"
                   textAnchor="middle"
                 >

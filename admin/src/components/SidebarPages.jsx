@@ -10,14 +10,14 @@ const SIDEBAR_STORAGE_KEY = 'sidebarElements'
 
 const PAGE_ICONS = {
   general: 'Settings',
-  sliderBanner: 'Slideshow',
-  homeListings: 'ViewList',
+  sliderBanner: 'Sliders',
+  homeListings: 'Layout',
   footer: 'Menu',
-  header: 'Settings',
-  partners: 'Image',
-  ads: 'Campaign',
-  youtubeCarousel: 'Video',
-  help: 'Help',
+  header: 'Navigation',
+  partners: 'Aperture',
+  ads: 'Target',
+  youtubeCarousel: 'Youtube',
+  help: 'HelpCircle',
 }
 
 function readOpenElements() {
@@ -86,7 +86,7 @@ export default function SidebarPages(props) {
         id: page.name,
         label: translatePage(page.name),
         isSelected: isActive(page.name),
-        icon: page.icon || 'Document',
+        icon: page.icon || 'File',
         href: `/admin/pages/${page.name}`,
         onClick: (event, element) => {
           event.preventDefault()

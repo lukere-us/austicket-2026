@@ -3,41 +3,11 @@ import { ApiClient } from 'adminjs'
 import { Badge, Box, Button, H2, Text } from '@adminjs/design-system'
 import { DashboardDailyChart } from './DashboardDailyChart.jsx'
 
-function Tile({ title, value, accent = '#2563eb' }) {
+function Tile({ title, value, accentClass = 'dashboard-tile--navy' }) {
   return (
-    <Box
-      p="xl"
-      borderRadius="lg"
-      style={{
-        background: '#fff',
-        border: '1px solid rgba(0,0,0,0.06)',
-        boxShadow: '0 2px 10px rgba(0,0,0,0.04)',
-        minHeight: 92,
-        position: 'relative',
-        overflow: 'hidden',
-      }}
-    >
-      <Box
-        style={{
-          position: 'absolute',
-          inset: '0 auto 0 0',
-          width: 6,
-          background: accent,
-        }}
-      />
-      <Text variant="sm" color="grey60">
-        {title}
-      </Text>
-      <Text
-        style={{
-          marginTop: 8,
-          fontSize: 28,
-          fontWeight: 700,
-          letterSpacing: '-0.02em',
-        }}
-      >
-        {value}
-      </Text>
+    <Box p="xl" borderRadius="lg" className={`dashboard-tile ${accentClass}`}>
+      <Text className="dashboard-tile__label">{title}</Text>
+      <Text className="dashboard-tile__value">{value}</Text>
     </Box>
   )
 }
@@ -87,17 +57,19 @@ export default function DashboardTiles() {
   }, [api])
 
   return (
-    <Box variant="grey" p="xxl">
-      <H2>Dashboard</H2>
-      <Text variant="sm" color="grey60" mt="sm">
-        {loading ? 'Loading…' : 'Overview'}
-      </Text>
+    <Box variant="grey" p="xxl" className="dashboard-page">
+      <Box className="dashboard-page__intro">
+        <H2 className="dashboard-page__title">Dashboard</H2>
+        <Text className="dashboard-page__subtitle" mt="sm">
+          {loading ? 'Loading…' : 'Overview of listings, visitors, and bookings'}
+        </Text>
+      </Box>
 
       <Box className="dashboard-overview" mt="xl">
         <Box className="dashboard-overview__tiles">
-          <Tile title="Listing count" value={data.listingCount} accent="#2563eb" />
-          <Tile title="User count" value={data.userCount} accent="#06b6d4" />
-          <Tile title="Comments count" value={data.commentCount} accent="#f97316" />
+          <Tile title="Listing count" value={data.listingCount} accentClass="dashboard-tile--navy" />
+          <Tile title="User count" value={data.userCount} accentClass="dashboard-tile--teal" />
+          <Tile title="Comments count" value={data.commentCount} accentClass="dashboard-tile--amber" />
         </Box>
 
         <Box className="dashboard-overview__charts">
@@ -108,7 +80,7 @@ export default function DashboardTiles() {
                 ? undefined
                 : `Analytics → Page visits · last ${data.analyticsDays} days · ${data.pageVisitsTotal} total`
             }
-            accent="#2563eb"
+            accentClass="dashboard-chart--navy"
             series={data.pageVisitsByDate}
             loading={loading}
             viewHref="/admin/resources/page_visits"
@@ -120,7 +92,7 @@ export default function DashboardTiles() {
                 ? undefined
                 : `Analytics → Booking clicks · last ${data.analyticsDays} days · ${data.bookingClicksTotal} total`
             }
-            accent="#f97316"
+            accentClass="dashboard-chart--amber"
             series={data.bookingClicksByDate}
             loading={loading}
             viewHref="/admin/resources/booking_clicks"
@@ -128,39 +100,18 @@ export default function DashboardTiles() {
         </Box>
       </Box>
 
-      <Box
-        mt="xl"
-        borderRadius="lg"
-        style={{
-          background: '#fff',
-          border: '1px solid rgba(0,0,0,0.06)',
-          boxShadow: '0 2px 10px rgba(0,0,0,0.04)',
-          overflow: 'hidden',
-        }}
-      >
-        <Box p="xl" style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-          <Text style={{ fontWeight: 700 }}>Recent listings</Text>
+      <Box mt="xl" borderRadius="lg" className="dashboard-recent">
+        <Box p="xl" className="dashboard-recent__head">
+          <Text className="dashboard-recent__title">Recent listings</Text>
         </Box>
         <Box>
           {(data.recentListings || []).length === 0 ? (
             <Box p="xl">
-              <Text color="grey60">{loading ? 'Loading…' : 'No listings yet.'}</Text>
+              <Text className="dashboard-muted">{loading ? 'Loading…' : 'No listings yet.'}</Text>
             </Box>
           ) : (
             <Box>
-              <Box
-                px="xl"
-                py="lg"
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 120px',
-                  gap: 12,
-                  borderBottom: '1px solid rgba(0,0,0,0.06)',
-                  background: 'rgba(0,0,0,0.02)',
-                  fontSize: 12,
-                  fontWeight: 700,
-                }}
-              >
+              <Box px="xl" py="lg" className="dashboard-recent__cols">
                 <Text>Title</Text>
                 <Text>Type</Text>
                 <Text>Status</Text>
@@ -190,40 +141,22 @@ export default function DashboardTiles() {
                 })()
 
                 return (
-                  <Box
-                    key={id}
-                    px="xl"
-                    py="lg"
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 120px',
-                      gap: 12,
-                      borderBottom: '1px solid rgba(0,0,0,0.06)',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <Text style={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {title}
-                    </Text>
-                    <Text variant="sm" color="grey60">
-                      {typeName}
-                    </Text>
+                  <Box key={id} px="xl" py="lg" className="dashboard-recent__row">
+                    <Text className="dashboard-recent__name">{title}</Text>
+                    <Text className="dashboard-muted">{typeName}</Text>
                     <Box>
                       <Badge variant={badge.variant} outline={status === 'draft'} size="sm">
                         {badge.label}
                       </Badge>
                     </Box>
-                    <Text variant="sm" color="grey60">
-                      📅 {publishAt}
-                    </Text>
-                    <Text variant="sm" color="grey60">
-                      {createdAt}
-                    </Text>
+                    <Text className="dashboard-muted">{publishAt}</Text>
+                    <Text className="dashboard-muted">{createdAt}</Text>
                     <Button
                       as="a"
                       href={`/admin/resources/listings/records/${encodeURIComponent(id)}/edit`}
                       variant="text"
                       size="sm"
+                      className="dashboard-recent__edit"
                     >
                       Edit →
                     </Button>

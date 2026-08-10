@@ -1,23 +1,6 @@
 import React from 'react'
 import { Box, Label, Text } from '@adminjs/design-system'
 
-const inputStyle = {
-  width: '100%',
-  boxSizing: 'border-box',
-  padding: '8px 12px',
-  borderRadius: 8,
-  border: '1px solid #d4d4d8',
-  fontSize: 14,
-  lineHeight: 1.4,
-  background: '#fff',
-  color: '#18181b',
-}
-
-const selectStyle = {
-  ...inputStyle,
-  cursor: 'pointer',
-}
-
 export function SettingsFieldRow({ field, value, onChange }) {
   const id = `setting-${field.key}`
 
@@ -50,8 +33,8 @@ export function SettingsFieldRow({ field, value, onChange }) {
         <select
           id={id}
           name={field.key}
+          className="admin-field-control"
           value={value ?? ''}
-          style={selectStyle}
           onChange={(e) => onChange(field.key, e.target.value)}
         >
           {(field.options || []).map((o) => (
@@ -76,9 +59,9 @@ export function SettingsFieldRow({ field, value, onChange }) {
         <textarea
           id={id}
           name={field.key}
+          className="admin-field-control admin-field-control--textarea"
           rows={field.rows || 4}
           value={value ?? ''}
-          style={{ ...inputStyle, minHeight: 96, resize: 'vertical' }}
           onChange={(e) => onChange(field.key, e.target.value)}
         />
         {field.help ? (
@@ -103,12 +86,12 @@ export function SettingsFieldRow({ field, value, onChange }) {
       <input
         id={id}
         name={field.key}
+        className="admin-field-control"
         type={field.type === 'number' ? 'number' : 'text'}
         value={displayValue}
         min={field.min}
         max={field.max}
         step={field.step}
-        style={inputStyle}
         onChange={(e) => {
           const raw = e.target.value
           if (field.type === 'number') {
