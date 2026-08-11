@@ -65,6 +65,7 @@ import {
   loadYoutubeCarouselSettings,
   saveYoutubeCarouselSettings,
 } from './lib/youtubeCarouselSettings.js'
+import { runSiteHealthChecks } from './lib/siteHealth.js'
 import { parseSettingsBody } from './lib/parseSettingsBody.js'
 import { can, canAny, loadAdminPermissions } from './lib/adminPermissions.js'
 import { attachAdminSessionRefresh, sessionWithAdminRefresh } from './lib/refreshAdminSession.js'
@@ -1035,6 +1036,15 @@ async function start() {
       }
     },
   )
+
+  settingsApi.get('/site-health', requirePermission('pages.siteHealth'), async (req, res) => {
+    try {
+      const pool = dbPool()
+      jsonNoCache(res, await runSiteHealthChecks(pool, req))
+    } catch (e) {
+      res.status(500).json({ error: e?.message || String(e) })
+    }
+  })
 
   app.use(
     `${adminJs.options.rootPath}/api/settings`,

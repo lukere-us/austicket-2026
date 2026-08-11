@@ -17,6 +17,7 @@ const PAGE_ICONS = {
   partners: 'Aperture',
   ads: 'Target',
   youtubeCarousel: 'Youtube',
+  siteHealth: 'Activity',
   help: 'HelpCircle',
 }
 

@@ -7,4 +7,5 @@ export const SITE_SETTINGS_SECTIONS = [
   { id: 'partners', label: 'Partners slider' },
   { id: 'ads', label: 'Ads' },
   { id: 'youtubeCarousel', label: 'YouTube carousel' },
+  { id: 'siteHealth', label: 'Site Health' },
 ]

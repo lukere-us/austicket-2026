@@ -112,6 +112,8 @@ export function canAccessSiteSettingsSection(admin, sectionId) {
       return canAny(admin, ['pages.ads', 'pages.homeListings', 'pages.sliderBanner'])
     case 'youtubeCarousel':
       return canAny(admin, ['pages.youtubeCarousel', 'pages.homeListings', 'pages.sliderBanner'])
+    case 'siteHealth':
+      return canAccessPage(admin, 'siteHealth')
     default:
       return false
   }

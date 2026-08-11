@@ -32,4 +32,13 @@ export async function ensureMainAdminPermissions(pool) {
       ON DUPLICATE KEY UPDATE allowed = 1, updated_at = CURRENT_TIMESTAMP
     `,
   )
+
+  await pool.execute(
+    `
+      INSERT INTO admin_role_permissions (role_id, permission_key, allowed)
+      SELECT r.id, 'pages.siteHealth', 1
+      FROM admin_roles r
+      ON DUPLICATE KEY UPDATE allowed = 1, updated_at = CURRENT_TIMESTAMP
+    `,
+  )
 }

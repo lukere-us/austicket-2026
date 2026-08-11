@@ -12,6 +12,7 @@ export const ADMIN_PERMISSION_GROUPS = [
       { key: 'pages.partners', label: 'Partners slider settings' },
       { key: 'pages.ads', label: 'Ads settings' },
       { key: 'pages.youtubeCarousel', label: 'YouTube carousel settings' },
+      { key: 'pages.siteHealth', label: 'Site Health' },
       { key: 'pages.help', label: 'Admin help guide' },
     ],
   },

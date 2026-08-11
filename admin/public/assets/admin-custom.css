@@ -1410,6 +1410,79 @@ html.admin-theme-dark [class*="TextArea"] {
   border-color: #334155 !important;
 }
 
+/* Searchable AdminJS/react-select: keep search input transparent so the
+   selected value (singleValue) stays visible underneath in dark theme. */
+html.admin-theme-dark .adminjs_Select input,
+html.admin-theme-dark [class*="adminjs_Select"] input,
+html.admin-theme-dark [class*="-control"] input,
+html.admin-theme-dark [class*="-Input"] input,
+html.admin-theme-dark [class*="ValueContainer"] input {
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #f8fafc !important;
+}
+
+html.admin-theme-dark .adminjs_Select [class*="-singleValue"],
+html.admin-theme-dark [class*="adminjs_Select"] [class*="-singleValue"],
+html.admin-theme-dark [class*="-singleValue"] {
+  color: #f8fafc !important;
+}
+
+html.admin-theme-dark .adminjs_Select [class*="-placeholder"],
+html.admin-theme-dark [class*="adminjs_Select"] [class*="-placeholder"],
+html.admin-theme-dark [class*="-placeholder"] {
+  color: #94a3b8 !important;
+}
+
+html.admin-theme-dark .adminjs_Select [class*="-multiValue"],
+html.admin-theme-dark [class*="-multiValue"] {
+  background: #1e293b !important;
+}
+
+html.admin-theme-dark .adminjs_Select [class*="-multiValueLabel"],
+html.admin-theme-dark [class*="-multiValueLabel"] {
+  color: #f8fafc !important;
+}
+
+html.admin-theme-dark .adminjs_Select [class*="-multiValueRemove"],
+html.admin-theme-dark [class*="-multiValueRemove"] {
+  color: #cbd5e1 !important;
+}
+
+html.admin-theme-dark .adminjs_Select [class*="-menu"],
+html.admin-theme-dark [class*="adminjs_Select"] [class*="-menu"],
+html.admin-theme-dark [class*="-MenuList"] {
+  background: #111827 !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+
+html.admin-theme-dark .adminjs_Select [class*="-option"],
+html.admin-theme-dark [class*="adminjs_Select"] [class*="-option"] {
+  background: #111827 !important;
+  color: #f8fafc !important;
+}
+
+html.admin-theme-dark .adminjs_Select [class*="-option"][class*="-option--is-focused"],
+html.admin-theme-dark .adminjs_Select [class*="-option"]:hover,
+html.admin-theme-dark [class*="adminjs_Select"] [class*="-option"]:hover {
+  background: #1e293b !important;
+  color: #f8fafc !important;
+}
+
+html.admin-theme-dark .adminjs_Select [class*="-option"][class*="-option--is-selected"],
+html.admin-theme-dark [class*="adminjs_Select"] [class*="-option"][class*="-option--is-selected"] {
+  background: #334155 !important;
+  color: #f8fafc !important;
+}
+
+html.admin-theme-dark .adminjs_Select [class*="-indicatorContainer"],
+html.admin-theme-dark .adminjs_Select [class*="-indicatorSeparator"],
+html.admin-theme-dark [class*="-indicatorContainer"] svg {
+  color: #94a3b8 !important;
+  fill: #94a3b8 !important;
+}
+
 html.admin-theme-dark label,
 html.admin-theme-dark [class*="Label"],
 html.admin-theme-dark h1,
@@ -1635,6 +1708,19 @@ html.admin-theme-dark [class*="PhoneInput"],
 html.admin-theme-dark [class*="DatePicker"] input {
   background: #0b1220 !important;
   border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+
+html.admin-theme-dark .adminjs_Select [class*="-control"],
+html.admin-theme-dark [class*="adminjs_Select"] [class*="-control"] {
+  background: #0b1220 !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+  min-height: 36px;
+}
+
+html.admin-theme-dark .adminjs_Select [class*="-ValueContainer"],
+html.admin-theme-dark .adminjs_Select [class*="-valueContainer"] {
   color: #f8fafc !important;
 }
 

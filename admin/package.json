@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "node scripts/start.mjs",
     "start": "node scripts/start.mjs",
-    "build:bundle": "node scripts/build-bundle.mjs"
+    "start:prod": "node scripts/start-production.mjs",
+    "build:bundle": "node scripts/build-bundle.mjs",
+    "patch:linux": "node scripts/patch-linux-deps.mjs"
   },
   "keywords": [],
   "author": "",

@@ -121,6 +121,7 @@ export async function buildAdminJs() {
       'GeneralSettings',
       path.join(__dirname, 'components', 'GeneralSettings.jsx')
     ),
+    SiteHealth: componentLoader.add('SiteHealth', path.join(__dirname, 'components', 'SiteHealth.jsx')),
     BlogCoverUpload: componentLoader.add(
       'BlogCoverUpload',
       path.join(__dirname, 'components', 'BlogCoverUpload.jsx')
@@ -1079,6 +1080,7 @@ export async function buildAdminJs() {
             partners: 'Partners slider',
             ads: 'Ads',
             youtubeCarousel: 'YouTube carousel',
+            siteHealth: 'Site Health',
             help: 'Help',
           },
         },
@@ -1163,6 +1165,11 @@ export async function buildAdminJs() {
         component: Components.YoutubeCarouselSettings,
         isAccessible: ({ currentAdmin }) =>
           canAny(currentAdmin, ['pages.youtubeCarousel', 'pages.homeListings', 'pages.sliderBanner']),
+      },
+      siteHealth: {
+        icon: 'Activity',
+        component: Components.SiteHealth,
+        isAccessible: ({ currentAdmin }) => canAccessPage(currentAdmin, 'siteHealth'),
       },
       help: {
         icon: 'HelpCircle',

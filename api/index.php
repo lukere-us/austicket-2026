@@ -554,9 +554,24 @@ function serve_upload_file(string $relativePath): void
   }
 
   $mime = mime_content_type($file) ?: 'application/octet-stream';
+  $size = filesize($file);
+  $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+
   header('Content-Type: ' . $mime);
+  if ($size !== false) {
+    header('Content-Length: ' . (string)$size);
+  }
+  header('Accept-Ranges: bytes');
   header('Cache-Control: public, max-age=86400');
   header('Access-Control-Allow-Origin: *');
+
+  // Social scrapers (WhatsApp/Facebook/etc.) often probe with HEAD first.
+  // Returning 404 for HEAD makes them skip the poster as the share thumbnail.
+  if ($method === 'HEAD') {
+    http_response_code(200);
+    exit;
+  }
+
   readfile($file);
   exit;
 }
@@ -569,8 +584,8 @@ if ($method === 'GET' && $path === '/') {
   json_response(['name' => 'aus-ticket-lanka-api', 'status' => 'ok']);
 }
 
-// Public: uploaded listing/gallery images from /Upload
-if ($method === 'GET' && preg_match('#^/media/(.+)$#', $path, $m)) {
+// Public: uploaded listing/gallery images from /Upload (GET + HEAD for share crawlers)
+if (($method === 'GET' || $method === 'HEAD') && preg_match('#^/media/(.+)$#', $path, $m)) {
   serve_upload_file($m[1]);
 }
 
