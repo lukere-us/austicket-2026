@@ -12,20 +12,6 @@ import {
   mergeAdsSettings,
 } from '../lib/adsSettings.shared.js'
 
-const rowInputStyle = {
-  width: '100%',
-  boxSizing: 'border-box',
-  padding: '8px 12px',
-  borderRadius: 8,
-  border: '1px solid #d4d4d8',
-  fontSize: 14,
-}
-
-const selectStyle = {
-  ...rowInputStyle,
-  cursor: 'pointer',
-}
-
 function newAdId() {
   return `ad-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
 }
@@ -69,28 +55,22 @@ function AdItemsEditor({ rows, onChange }) {
   }
 
   return (
-    <Box mb="xxl">
+    <Box mb="xxl" className="ads-settings__section">
       <H4 mb="md">Ads</H4>
-      <Text variant="sm" color="grey60" mb="md">
+      <Text variant="sm" mb="md" className="ads-settings__help">
         Add any number of ads. Types: Image (optional click link), YouTube video, Embed HTML, or Iframe URL.
         Check <strong>Show in Details page</strong> to place an ad only in the listing detail sidebar; leave it
         unchecked for homepage and blog sidebar.
       </Text>
 
       {rows.map((row, index) => (
-        <Box
-          key={row.id || `ad-row-${index}`}
-          mb="md"
-          p="md"
-          borderRadius="lg"
-          style={{ border: '1px solid #e4e4e7', background: '#fafafa' }}
-        >
+        <Box key={row.id || `ad-row-${index}`} mb="md" p="md" borderRadius="lg" className="ads-settings__card">
           <Box display="flex" justifyContent="space-between" alignItems="center" mb="md" flexWrap="wrap" gap="sm">
-            <Text variant="sm" fontWeight="bold">
+            <Text variant="sm" fontWeight="bold" className="ads-settings__card-title">
               Ad {index + 1}
             </Text>
             <Box display="flex" gap="sm" alignItems="center" flexWrap="wrap">
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+              <label className="ads-settings__check">
                 <input
                   type="checkbox"
                   checked={Boolean(row.enabled)}
@@ -98,7 +78,7 @@ function AdItemsEditor({ rows, onChange }) {
                 />
                 Enabled
               </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+              <label className="ads-settings__check">
                 <input
                   type="checkbox"
                   checked={Boolean(row.showOnDetailsPage)}
@@ -126,11 +106,11 @@ function AdItemsEditor({ rows, onChange }) {
 
           <Box display="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 12 }} mb="md">
             <Box>
-              <Text variant="sm" mb="sm">
+              <Text variant="sm" mb="sm" className="ads-settings__label">
                 Ad type
               </Text>
               <select
-                style={selectStyle}
+                className="ads-settings__input ads-settings__select"
                 value={row.adType || 'image'}
                 onChange={(e) => updateRow(index, { adType: e.target.value })}
               >
@@ -142,11 +122,11 @@ function AdItemsEditor({ rows, onChange }) {
               </select>
             </Box>
             <Box>
-              <Text variant="sm" mb="sm">
+              <Text variant="sm" mb="sm" className="ads-settings__label">
                 Title / label (optional)
               </Text>
               <input
-                style={rowInputStyle}
+                className="ads-settings__input"
                 value={row.title || ''}
                 onChange={(e) => updateRow(index, { title: e.target.value })}
                 placeholder="Alt text or label"
@@ -156,16 +136,16 @@ function AdItemsEditor({ rows, onChange }) {
 
           {row.adType === 'image' ? (
             <Box>
-              <Text variant="sm" mb="sm">
+              <Text variant="sm" mb="sm" className="ads-settings__label">
                 Image
               </Text>
               <AdImageUpload value={row.imageUrl || ''} onChange={(imageUrl) => updateRow(index, { imageUrl })} />
               <Box mt="md">
-                <Text variant="sm" mb="sm">
+                <Text variant="sm" mb="sm" className="ads-settings__label">
                   Link URL (optional — opens when the image is clicked)
                 </Text>
                 <input
-                  style={rowInputStyle}
+                  className="ads-settings__input"
                   value={row.linkUrl || ''}
                   onChange={(e) => updateRow(index, { linkUrl: e.target.value })}
                   placeholder="https://… or /path"
@@ -176,11 +156,11 @@ function AdItemsEditor({ rows, onChange }) {
 
           {row.adType === 'youtube' ? (
             <Box>
-              <Text variant="sm" mb="sm">
+              <Text variant="sm" mb="sm" className="ads-settings__label">
                 YouTube URL
               </Text>
               <input
-                style={rowInputStyle}
+                className="ads-settings__input"
                 value={row.youtubeUrl || ''}
                 onChange={(e) => updateRow(index, { youtubeUrl: e.target.value })}
                 placeholder="https://www.youtube.com/watch?v=… or youtu.be/…"
@@ -190,11 +170,11 @@ function AdItemsEditor({ rows, onChange }) {
 
           {row.adType === 'html' ? (
             <Box>
-              <Text variant="sm" mb="sm">
+              <Text variant="sm" mb="sm" className="ads-settings__label">
                 Embed HTML
               </Text>
               <textarea
-                style={{ ...rowInputStyle, minHeight: 120, fontFamily: 'monospace', resize: 'vertical' }}
+                className="ads-settings__input ads-settings__textarea"
                 value={row.embedHtml || ''}
                 onChange={(e) => updateRow(index, { embedHtml: e.target.value })}
                 placeholder="<div>…</div>"
@@ -204,11 +184,11 @@ function AdItemsEditor({ rows, onChange }) {
 
           {row.adType === 'iframe' ? (
             <Box>
-              <Text variant="sm" mb="sm">
+              <Text variant="sm" mb="sm" className="ads-settings__label">
                 Iframe URL
               </Text>
               <input
-                style={rowInputStyle}
+                className="ads-settings__input"
                 value={row.iframeUrl || ''}
                 onChange={(e) => updateRow(index, { iframeUrl: e.target.value })}
                 placeholder="https://…"
@@ -315,16 +295,16 @@ export default function AdsSettings() {
 
   if (loading) {
     return (
-      <Box variant="white" p="xxl">
+      <Box variant="white" p="xxl" className="ads-settings">
         <Loader />
       </Box>
     )
   }
 
   return (
-    <Box variant="white" p="xxl">
+    <Box variant="white" p="xxl" className="ads-settings">
       <H2>Ads</H2>
-      <Text variant="sm" color="grey60" mt="sm" mb="xl">
+      <Text variant="sm" mt="sm" mb="xl" className="ads-settings__help">
         Manage homepage, blog, and listing-detail ads. Use <strong>Show in Details page</strong> on each ad to
         place it only in the listing detail sidebar; unchecked ads appear on the homepage and blog sidebars.
       </Text>

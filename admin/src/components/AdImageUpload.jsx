@@ -60,25 +60,18 @@ export function AdImageUpload(props) {
   }
 
   return (
-    <Box display="flex" gap="md" alignItems="center" flexWrap="wrap">
+    <Box display="flex" gap="md" alignItems="center" flexWrap="wrap" className="ads-settings__upload">
       <Box
         display="flex"
         alignItems="center"
         justifyContent="center"
-        style={{
-          width: 160,
-          height: 90,
-          borderRadius: 8,
-          border: '1px solid #e4e4e7',
-          background: '#fff',
-          overflow: 'hidden',
-        }}
+        className="ads-settings__preview"
       >
         {previewUrl ? (
           // eslint-disable-next-line jsx-a11y/alt-text
           <img src={previewUrl} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
         ) : (
-          <Text variant="sm" color="grey60">
+          <Text variant="sm" className="ads-settings__help">
             No image
           </Text>
         )}
@@ -89,6 +82,7 @@ export function AdImageUpload(props) {
           accept=".svg,.png,.jpg,.jpeg,.webp,.gif,image/*"
           onChange={onFile}
           disabled={isUploading}
+          className="ads-settings__file"
         />
         {isUploading ? <Loader /> : null}
         {imagePath ? (
