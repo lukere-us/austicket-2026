@@ -1246,6 +1246,46 @@ function emptyCastDraft() {
 	};
 }
 
+function mapCastRecordToOption(r) {
+	const name = r?.params?.name ? String(r.params.name) : `Cast #${r.id}`;
+	const position = r?.params?.position ? String(r.params.position) : "";
+	return {
+		value: String(r.id),
+		label: position ? `${name} — ${position}` : name,
+		nameKey: normalizeNameKey(r?.params?.name),
+	};
+}
+
+function mergeCastOptions(preferred, incoming) {
+	const byId = new Map();
+	for (const opt of incoming || []) {
+		if (opt?.value != null) byId.set(String(opt.value), opt);
+	}
+	for (const opt of preferred || []) {
+		if (opt?.value != null) byId.set(String(opt.value), opt);
+	}
+	return Array.from(byId.values()).sort((a, b) =>
+		String(a.label).localeCompare(String(b.label)),
+	);
+}
+
+async function fetchCastOptions(api, query = "") {
+	const q = String(query || "").trim();
+	const params = {
+		perPage: q ? 50 : 500,
+		sortBy: "name",
+		direction: "asc",
+	};
+	if (q) params["filters.name"] = q;
+	const res = await api.resourceAction({
+		resourceId: "casts",
+		actionName: "list",
+		params,
+	});
+	const records = Array.isArray(res?.data?.records) ? res.data.records : [];
+	return records.map(mapCastRecordToOption);
+}
+
 function normalizeNameKey(
 	value,
 ) {
@@ -2521,6 +2561,11 @@ export default function ListingTabbedForm(
 		useState(
 			[],
 		);
+	const selectedCastIdsRef = useRef(selectedCastIds);
+	selectedCastIdsRef.current = selectedCastIds;
+	const castOptionsRef = useRef([]);
+	castOptionsRef.current = castOptions;
+	const castSearchTimerRef = useRef(null);
 	const [
 		galleryImages,
 		setGalleryImages,
@@ -3095,111 +3140,70 @@ export default function ListingTabbedForm(
 	// Load casts options
 	useEffect(() => {
 		let cancelled = false;
-		const run =
-			async () => {
-				setIsCastsLoading(
-					true,
-				);
-				try {
-					const res =
-						await api.resourceAction(
-							{
-								resourceId:
-									"casts",
-								actionName:
-									"list",
-								params:
-									{
-										perPage: 500,
-										sortBy:
-											"name",
-										direction:
-											"asc",
-									},
-							},
-						);
-					const records =
-						Array.isArray(
-							res
-								?.data
-								?.records,
-						)
-							? res
-									.data
-									.records
-							: [];
-					const opts =
-						records.map(
-							(
-								r,
-							) => ({
-								value:
-									String(
-										r.id,
-									),
-								label: `${r?.params?.name ? String(r.params.name) : `Cast #${r.id}`}${
-									r
-										?.params
-										?.position
-										? ` — ${String(r.params.position)}`
-										: ""
-								}`,
-							}),
-						);
-					const nameKeys =
-						records
-							.map(
-								(
-									r,
-								) =>
-									normalizeNameKey(
-										r
-											?.params
-											?.name,
-									),
-							)
-							.filter(
-								Boolean,
-							);
-					if (
-						!cancelled
-					)
-						setCastOptions(
-							opts,
-						);
-					if (
-						!cancelled
-					)
-						setCastNameKeys(
-							nameKeys,
-						);
-				} catch (e) {
-					if (
-						!cancelled
-					) {
-						sendNoticeRef.current(
-							{
-								type: "error",
-								message: `Failed to load cast: ${e?.message || e}`,
-							},
-						);
+		const run = async () => {
+			setIsCastsLoading(true);
+			try {
+				const opts = await fetchCastOptions(api);
+				if (cancelled) return;
+				setCastOptions((prev) => mergeCastOptions(prev, opts));
+				setCastNameKeys((prev) => {
+					const next = new Set(prev);
+					for (const opt of opts) {
+						if (opt.nameKey) next.add(opt.nameKey);
 					}
-				} finally {
-					if (
-						!cancelled
-					)
-						setIsCastsLoading(
-							false,
-						);
+					return Array.from(next);
+				});
+			} catch (e) {
+				if (!cancelled) {
+					sendNoticeRef.current({
+						type: "error",
+						message: `Failed to load cast: ${e?.message || e}`,
+					});
 				}
-			};
+			} finally {
+				if (!cancelled) setIsCastsLoading(false);
+			}
+		};
 		void run();
 		return () => {
 			cancelled = true;
+			if (castSearchTimerRef.current) {
+				clearTimeout(castSearchTimerRef.current);
+			}
 		};
-	}, [
-		api,
-	]);
+	}, [api]);
+
+	const searchCasts = useCallback((query) => {
+		if (castSearchTimerRef.current) {
+			clearTimeout(castSearchTimerRef.current);
+		}
+		castSearchTimerRef.current = setTimeout(async () => {
+			setIsCastsLoading(true);
+			try {
+				const opts = await fetchCastOptions(api, query);
+				const selected = (selectedCastIdsRef.current || [])
+					.map((id) =>
+						castOptionsRef.current.find((o) => String(o.value) === String(id)),
+					)
+					.filter(Boolean);
+				setCastOptions(mergeCastOptions(selected, opts));
+				setCastNameKeys((prev) => {
+					const next = new Set(prev);
+					for (const opt of opts) {
+						if (opt.nameKey) next.add(opt.nameKey);
+					}
+					return Array.from(next);
+				});
+			} catch (e) {
+				sendNoticeRef.current({
+					type: "error",
+					message: `Failed to search cast: ${e?.message || e}`,
+				});
+			} finally {
+				setIsCastsLoading(false);
+			}
+		}, 250);
+	}, [api]);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -3376,6 +3380,37 @@ export default function ListingTabbedForm(
 		listingId,
 		api,
 	]);
+
+	useEffect(() => {
+		const missing = (selectedCastIds || []).filter(
+			(id) => !castOptionsRef.current.some((o) => String(o.value) === String(id)),
+		);
+		if (!missing.length) return undefined;
+		let cancelled = false;
+		const run = async () => {
+			const extras = [];
+			for (const id of missing) {
+				try {
+					const res = await api.recordAction({
+						resourceId: "casts",
+						recordId: id,
+						actionName: "show",
+					});
+					const rec = res?.data?.record;
+					if (rec) extras.push(mapCastRecordToOption(rec));
+				} catch {
+					/* ignore missing records */
+				}
+			}
+			if (!cancelled && extras.length) {
+				setCastOptions((prev) => mergeCastOptions(extras, prev));
+			}
+		};
+		void run();
+		return () => {
+			cancelled = true;
+		};
+	}, [selectedCastIds, api]);
 
 	const uploadImages =
 		async (
@@ -5015,7 +5050,7 @@ export default function ListingTabbedForm(
 					<ListingFormSection
 						step={6}
 						title="Cast"
-						description="People shown on the listing detail page. Manage profiles under Dashboard → Users → Cast."
+						description="People shown on the listing detail page. Type a name to search the full cast list. Manage profiles under Dashboard → Users → Cast."
 					>
 						<Box
 							display="flex"
@@ -5026,6 +5061,7 @@ export default function ListingTabbedForm(
 							<Box flex={1} style={{ minWidth: 0 }}>
 								<Select
 									isMulti
+									isSearchable
 									isLoading={isCastsLoading}
 									options={castOptions}
 									placeholder="Search & select cast…"
@@ -5037,6 +5073,12 @@ export default function ListingTabbedForm(
 											(opts || []).map((o) => String(o.value)),
 										)
 									}
+									onInputChange={(input, meta) => {
+										if (meta?.action === "input-change") {
+											searchCasts(input);
+										}
+										return input;
+									}}
 								/>
 							</Box>
 							<Button

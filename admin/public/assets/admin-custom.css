@@ -1438,8 +1438,11 @@ html.admin-theme-dark [class*="-placeholder"] {
 html.admin-theme-dark .adminjs_Select [class*="-multiValue"],
 html.admin-theme-dark [class*="-multiValue"] {
   background: #1e293b !important;
+  color: #f8fafc !important;
 }
 
+html.admin-theme-dark .adminjs_Select [class*="-multiValue"] *,
+html.admin-theme-dark [class*="-multiValue"] *,
 html.admin-theme-dark .adminjs_Select [class*="-multiValueLabel"],
 html.admin-theme-dark [class*="-multiValueLabel"] {
   color: #f8fafc !important;
@@ -1536,7 +1539,63 @@ html.admin-theme-dark .ql-container.ql-snow {
   color: #f8fafc !important;
 }
 
-html.admin-theme-dark .ql-editor {
+html.admin-theme-dark .ql-snow .ql-stroke {
+  stroke: #cbd5e1 !important;
+}
+
+html.admin-theme-dark .ql-snow .ql-fill,
+html.admin-theme-dark .ql-snow .ql-stroke.ql-fill {
+  fill: #cbd5e1 !important;
+}
+
+html.admin-theme-dark .ql-snow .ql-picker,
+html.admin-theme-dark .ql-snow .ql-picker-label,
+html.admin-theme-dark .ql-snow .ql-picker-item {
+  color: #e2e8f0 !important;
+}
+
+html.admin-theme-dark .ql-snow .ql-picker-options {
+  background: #111827 !important;
+  border-color: #334155 !important;
+}
+
+html.admin-theme-dark .ql-editor,
+html.admin-theme-dark .ql-editor.ql-blank,
+html.admin-theme-dark .listing-form .ql-editor,
+html.admin-theme-dark .admin-rich-text-editor .ql-editor {
+  color: #f8fafc !important;
+}
+
+html.admin-theme-dark .ql-editor.ql-blank::before {
+  color: #94a3b8 !important;
+  opacity: 1;
+}
+
+html.admin-theme-dark .ql-editor p,
+html.admin-theme-dark .ql-editor li,
+html.admin-theme-dark .ql-editor h1,
+html.admin-theme-dark .ql-editor h2,
+html.admin-theme-dark .ql-editor h3,
+html.admin-theme-dark .ql-editor h4,
+html.admin-theme-dark .ql-editor h5,
+html.admin-theme-dark .ql-editor h6,
+html.admin-theme-dark .ql-editor span,
+html.admin-theme-dark .ql-editor strong,
+html.admin-theme-dark .ql-editor em,
+html.admin-theme-dark .ql-editor u,
+html.admin-theme-dark .ql-editor blockquote,
+html.admin-theme-dark .ql-editor div,
+html.admin-theme-dark .ql-editor [style*="color"] {
+  color: #f8fafc !important;
+}
+
+html.admin-theme-dark .ql-editor a {
+  color: #fbbf24 !important;
+}
+
+html.admin-theme-dark .admin-rich-text-editor__html {
+  background: #0b1220 !important;
+  border-color: #334155 !important;
   color: #f8fafc !important;
 }
 
@@ -1692,8 +1751,10 @@ html.admin-theme-dark section[data-css="drawer-content"] > [class*="Box"] {
 
 html.admin-theme-dark [data-css="property-label"],
 html.admin-theme-dark [class*="PropertyLabel"],
-html.admin-theme-dark [class*="Label"] {
-  color: #cbd5e1 !important;
+html.admin-theme-dark [class*="Label"],
+html.admin-theme-dark .listing-form label,
+html.admin-theme-dark .listing-form [class*="Label"] {
+  color: #e2e8f0 !important;
 }
 
 html.admin-theme-dark [data-css="property"],

@@ -35,7 +35,7 @@ function footer_default_settings(): array
     'citiesHeading' => 'Popular cities',
     'showAllEventsLink' => true,
     'allEventsLabel' => 'All events',
-    'allEventsUrl' => '/',
+    'allEventsUrl' => '/listings',
     'maxAutoCities' => 8,
     'cityLinks' => [],
     'linksHeading' => 'Useful links',

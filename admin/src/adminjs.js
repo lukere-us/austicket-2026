@@ -1290,6 +1290,7 @@ export async function buildAdminJs() {
         navigation: { name: 'Users', icon: 'Star' },
         sort: { sortBy: 'created_at', direction: 'desc' },
         listProperties: ['image_path', 'name', 'position', 'facebook_url', 'instagram_url', 'tiktok_url', 'wikipedia_url'],
+        filterProperties: ['name', 'position'],
         properties: hideAuditProperties({
           image_path: {
             components: {
@@ -1299,6 +1300,7 @@ export async function buildAdminJs() {
             },
           },
           name: {
+            isTitle: true,
             components: {
               edit: Components.CastNameWithDuplicateHint,
             },
