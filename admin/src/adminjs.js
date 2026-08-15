@@ -7,7 +7,7 @@ import { Adapter, Database, Resource } from './lib/adminjsSql.js'
 import { dbPool, getDbConfig } from './db.js'
 import { normalizeListingDatetime } from './components/listingDateUtils.js'
 import { fetchDailyAnalyticsSeries, fetchDashboardAnalytics } from './lib/dashboardAnalytics.js'
-import { applyPermissionsToResourceOptions, can, canAny, canAccessPage, isMainAdminRole } from './lib/adminPermissions.js'
+import { applyPermissionsToResourceOptions, can, canAccessPage, isMainAdminRole } from './lib/adminPermissions.js'
 import { loadHeaderSettings } from './lib/headerSettings.js'
 import { resolveAdminBrandLogoFromHeader } from './lib/adminBrandLogo.js'
 import { ADMIN_PERMISSION_KEYS } from './lib/adminPermissions.shared.js'
@@ -1123,8 +1123,7 @@ export async function buildAdminJs() {
       general: {
         icon: 'Settings',
         component: Components.GeneralSettings,
-        isAccessible: ({ currentAdmin }) =>
-          canAny(currentAdmin, ['pages.general', 'pages.homeListings', 'pages.sliderBanner']),
+        isAccessible: ({ currentAdmin }) => canAccessPage(currentAdmin, 'general'),
       },
       sliderBanner: {
         icon: 'Sliders',
@@ -1139,32 +1138,27 @@ export async function buildAdminJs() {
       footer: {
         icon: 'Menu',
         component: Components.FooterSettings,
-        isAccessible: ({ currentAdmin }) =>
-          canAny(currentAdmin, ['pages.footer', 'pages.homeListings', 'pages.sliderBanner']),
+        isAccessible: ({ currentAdmin }) => canAccessPage(currentAdmin, 'footer'),
       },
       header: {
         icon: 'Navigation',
         component: Components.HeaderSettings,
-        isAccessible: ({ currentAdmin }) =>
-          canAny(currentAdmin, ['pages.header', 'pages.homeListings', 'pages.sliderBanner']),
+        isAccessible: ({ currentAdmin }) => canAccessPage(currentAdmin, 'header'),
       },
       partners: {
         icon: 'Aperture',
         component: Components.PartnersSettings,
-        isAccessible: ({ currentAdmin }) =>
-          canAny(currentAdmin, ['pages.partners', 'pages.homeListings', 'pages.sliderBanner']),
+        isAccessible: ({ currentAdmin }) => canAccessPage(currentAdmin, 'partners'),
       },
       ads: {
         icon: 'Target',
         component: Components.AdsSettings,
-        isAccessible: ({ currentAdmin }) =>
-          canAny(currentAdmin, ['pages.ads', 'pages.homeListings', 'pages.sliderBanner']),
+        isAccessible: ({ currentAdmin }) => canAccessPage(currentAdmin, 'ads'),
       },
       youtubeCarousel: {
         icon: 'Youtube',
         component: Components.YoutubeCarouselSettings,
-        isAccessible: ({ currentAdmin }) =>
-          canAny(currentAdmin, ['pages.youtubeCarousel', 'pages.homeListings', 'pages.sliderBanner']),
+        isAccessible: ({ currentAdmin }) => canAccessPage(currentAdmin, 'youtubeCarousel'),
       },
       siteHealth: {
         icon: 'Activity',
@@ -1174,7 +1168,7 @@ export async function buildAdminJs() {
       help: {
         icon: 'HelpCircle',
         component: Components.AdminHelp,
-        isAccessible: ({ currentAdmin }) => Boolean(currentAdmin),
+        isAccessible: ({ currentAdmin }) => canAccessPage(currentAdmin, 'help'),
       },
     },
     resources: [

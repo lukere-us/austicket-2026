@@ -4,6 +4,32 @@ import { SITE_SETTINGS_SECTIONS } from './siteSettingsSections.shared.js'
 const MAIN_ADMIN_ROLE = 'main_admin'
 const STANDARD_ACTIONS = ['list', 'show', 'new', 'edit', 'delete', 'bulkDelete']
 
+/**
+ * Hidden nest resources used only inside Listing forms.
+ * They are not in the roles UI — map them to parent `listings.*` grants.
+ */
+const RESOURCE_PERMISSION_ALIASES = {
+  shows: 'listings',
+  show_times: 'listings',
+  listing_casts: 'listings',
+}
+
+function permissionKeyFor(resourceId, action) {
+  const mapped = RESOURCE_PERMISSION_ALIASES[resourceId] || resourceId
+  return `${mapped}.${action}`
+}
+
+/** Venue / city lookups needed to attach showtimes on a listing. */
+function canUseListingLocationHelper(admin, action) {
+  if (['list', 'show'].includes(action)) {
+    return canAny(admin, ['listings.list', 'listings.show', 'listings.edit', 'listings.new'])
+  }
+  if (action === 'new') {
+    return canAny(admin, ['listings.edit', 'listings.new'])
+  }
+  return false
+}
+
 export function normalizeRoleKey(roleName) {
   return String(roleName || '')
     .trim()
@@ -65,14 +91,24 @@ export function applyPermissionsToResourceOptions(options, resourceId, extraActi
   const next = { ...options, actions: { ...(options.actions || {}) } }
   const actions = next.actions
 
+  const checkAction = (action) => (ctx) => {
+    if (can(ctx.currentAdmin, permissionKeyFor(resourceId, action))) return true
+    // Places/cities are under Locations in the roles UI, but listing showtimes need them.
+    if (
+      (resourceId === 'places' || resourceId === 'cities') &&
+      canUseListingLocationHelper(ctx.currentAdmin, action)
+    ) {
+      return true
+    }
+    return false
+  }
+
   for (const action of STANDARD_ACTIONS) {
     const current = actions[action]
     const currentObj = current && typeof current === 'object' ? current : {}
     actions[action] = {
       ...currentObj,
-      isAccessible: mergeAccessible(currentObj.isAccessible, (ctx) =>
-        can(ctx.currentAdmin, `${resourceId}.${action}`)
-      ),
+      isAccessible: mergeAccessible(currentObj.isAccessible, checkAction(action)),
     }
   }
 
@@ -81,9 +117,7 @@ export function applyPermissionsToResourceOptions(options, resourceId, extraActi
     const currentObj = current && typeof current === 'object' ? current : {}
     actions[action] = {
       ...currentObj,
-      isAccessible: mergeAccessible(currentObj.isAccessible, (ctx) =>
-        can(ctx.currentAdmin, `${resourceId}.${action}`)
-      ),
+      isAccessible: mergeAccessible(currentObj.isAccessible, checkAction(action)),
     }
   }
 
@@ -94,29 +128,10 @@ export function canAccessPage(admin, pageKey) {
   return can(admin, `pages.${pageKey}`)
 }
 
+/** Exact page permission only — do not OR with unrelated Site settings grants. */
 export function canAccessSiteSettingsSection(admin, sectionId) {
-  switch (sectionId) {
-    case 'general':
-      return canAny(admin, ['pages.general', 'pages.homeListings', 'pages.sliderBanner'])
-    case 'sliderBanner':
-      return canAccessPage(admin, 'sliderBanner')
-    case 'homeListings':
-      return canAccessPage(admin, 'homeListings')
-    case 'footer':
-      return canAny(admin, ['pages.footer', 'pages.homeListings', 'pages.sliderBanner'])
-    case 'header':
-      return canAny(admin, ['pages.header', 'pages.homeListings', 'pages.sliderBanner'])
-    case 'partners':
-      return canAny(admin, ['pages.partners', 'pages.homeListings', 'pages.sliderBanner'])
-    case 'ads':
-      return canAny(admin, ['pages.ads', 'pages.homeListings', 'pages.sliderBanner'])
-    case 'youtubeCarousel':
-      return canAny(admin, ['pages.youtubeCarousel', 'pages.homeListings', 'pages.sliderBanner'])
-    case 'siteHealth':
-      return canAccessPage(admin, 'siteHealth')
-    default:
-      return false
-  }
+  if (!sectionId) return false
+  return canAccessPage(admin, sectionId)
 }
 
 export function accessibleSiteSettingsSections(admin) {

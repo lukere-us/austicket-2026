@@ -812,7 +812,7 @@ async function start() {
   const settingsApi = express.Router()
   settingsApi.use(express.json({ limit: '256kb' }))
 
-  settingsApi.get('/general', requireAnyPermission('pages.general', 'pages.homeListings', 'pages.sliderBanner'), async (_req, res) => {
+  settingsApi.get('/general', requirePermission('pages.general'), async (_req, res) => {
     try {
       const pool = dbPool()
       jsonNoCache(res, {
@@ -824,7 +824,7 @@ async function start() {
     }
   })
 
-  settingsApi.post('/general', requireAnyPermission('pages.general', 'pages.homeListings', 'pages.sliderBanner'), async (req, res) => {
+  settingsApi.post('/general', requirePermission('pages.general'), async (req, res) => {
     try {
       const pool = dbPool()
       const settings = await saveGeneralSettings(pool, parseSettingsBody(req))
@@ -897,7 +897,7 @@ async function start() {
     }
   })
 
-  settingsApi.get('/footer', requireAnyPermission('pages.footer', 'pages.homeListings', 'pages.sliderBanner'), async (_req, res) => {
+  settingsApi.get('/footer', requirePermission('pages.footer'), async (_req, res) => {
     try {
       const pool = dbPool()
       jsonNoCache(res, {
@@ -910,7 +910,7 @@ async function start() {
     }
   })
 
-  settingsApi.post('/footer', requireAnyPermission('pages.footer', 'pages.homeListings', 'pages.sliderBanner'), async (req, res) => {
+  settingsApi.post('/footer', requirePermission('pages.footer'), async (req, res) => {
     try {
       const pool = dbPool()
       const settings = await saveFooterSettings(pool, parseSettingsBody(req))
@@ -925,7 +925,7 @@ async function start() {
     }
   })
 
-  settingsApi.get('/header', requireAnyPermission('pages.header', 'pages.homeListings', 'pages.sliderBanner'), async (_req, res) => {
+  settingsApi.get('/header', requirePermission('pages.header'), async (_req, res) => {
     try {
       const pool = dbPool()
       jsonNoCache(res, {
@@ -937,7 +937,7 @@ async function start() {
     }
   })
 
-  settingsApi.post('/header', requireAnyPermission('pages.header', 'pages.homeListings', 'pages.sliderBanner'), async (req, res) => {
+  settingsApi.post('/header', requirePermission('pages.header'), async (req, res) => {
     try {
       const pool = dbPool()
       const settings = await saveHeaderSettings(pool, parseSettingsBody(req))
@@ -951,7 +951,7 @@ async function start() {
     }
   })
 
-  settingsApi.get('/partners', requireAnyPermission('pages.partners', 'pages.homeListings', 'pages.sliderBanner'), async (_req, res) => {
+  settingsApi.get('/partners', requirePermission('pages.partners'), async (_req, res) => {
     try {
       const pool = dbPool()
       jsonNoCache(res, {
@@ -963,7 +963,7 @@ async function start() {
     }
   })
 
-  settingsApi.post('/partners', requireAnyPermission('pages.partners', 'pages.homeListings', 'pages.sliderBanner'), async (req, res) => {
+  settingsApi.post('/partners', requirePermission('pages.partners'), async (req, res) => {
     try {
       const pool = dbPool()
       const settings = await savePartnersSettings(pool, parseSettingsBody(req))
@@ -977,7 +977,7 @@ async function start() {
     }
   })
 
-  settingsApi.get('/ads', requireAnyPermission('pages.ads', 'pages.homeListings', 'pages.sliderBanner'), async (_req, res) => {
+  settingsApi.get('/ads', requirePermission('pages.ads'), async (_req, res) => {
     try {
       const pool = dbPool()
       jsonNoCache(res, {
@@ -989,7 +989,7 @@ async function start() {
     }
   })
 
-  settingsApi.post('/ads', requireAnyPermission('pages.ads', 'pages.homeListings', 'pages.sliderBanner'), async (req, res) => {
+  settingsApi.post('/ads', requirePermission('pages.ads'), async (req, res) => {
     try {
       const pool = dbPool()
       const settings = await saveAdsSettings(pool, parseSettingsBody(req))
@@ -1005,7 +1005,7 @@ async function start() {
 
   settingsApi.get(
     '/youtube-carousel',
-    requireAnyPermission('pages.youtubeCarousel', 'pages.homeListings', 'pages.sliderBanner'),
+    requirePermission('pages.youtubeCarousel'),
     async (_req, res) => {
       try {
         const pool = dbPool()
@@ -1021,7 +1021,7 @@ async function start() {
 
   settingsApi.post(
     '/youtube-carousel',
-    requireAnyPermission('pages.youtubeCarousel', 'pages.homeListings', 'pages.sliderBanner'),
+    requirePermission('pages.youtubeCarousel'),
     async (req, res) => {
       try {
         const pool = dbPool()

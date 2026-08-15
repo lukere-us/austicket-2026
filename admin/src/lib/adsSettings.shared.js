@@ -44,7 +44,7 @@ export const FIELD_GROUPS = [
         key: 'sectionTitle',
         label: 'Section title (optional)',
         type: 'text',
-        help: 'Shown above the homepage ads block. Leave blank for no title.',
+        help: 'Shown above the homepage ads block and the listing detail sidebar ads. Leave blank for no title.',
       },
     ],
   },

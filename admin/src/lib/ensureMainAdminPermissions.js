@@ -24,21 +24,28 @@ export async function ensureMainAdminPermissions(pool) {
     }
   }
 
+  // Seed new page keys only when missing — never force-enable after an admin unchecks them.
   await pool.execute(
     `
       INSERT INTO admin_role_permissions (role_id, permission_key, allowed)
-      SELECT r.id, 'pages.youtubeCarousel', 1
+      SELECT r.id, 'pages.youtubeCarousel', 0
       FROM admin_roles r
-      ON DUPLICATE KEY UPDATE allowed = 1, updated_at = CURRENT_TIMESTAMP
+      WHERE NOT EXISTS (
+        SELECT 1 FROM admin_role_permissions p
+        WHERE p.role_id = r.id AND p.permission_key = 'pages.youtubeCarousel'
+      )
     `,
   )
 
   await pool.execute(
     `
       INSERT INTO admin_role_permissions (role_id, permission_key, allowed)
-      SELECT r.id, 'pages.siteHealth', 1
+      SELECT r.id, 'pages.siteHealth', 0
       FROM admin_roles r
-      ON DUPLICATE KEY UPDATE allowed = 1, updated_at = CURRENT_TIMESTAMP
+      WHERE NOT EXISTS (
+        SELECT 1 FROM admin_role_permissions p
+        WHERE p.role_id = r.id AND p.permission_key = 'pages.siteHealth'
+      )
     `,
   )
 }
