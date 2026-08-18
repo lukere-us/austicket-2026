@@ -344,9 +344,29 @@ function show_times_table_ready(PDO $pdo): bool
   return $ready;
 }
 
+function listing_next_show_sort_sql(string $showAlias = 'sh'): string
+{
+  // Prefer the next future showtime, then a future start_date, so past dates sort last.
+  return "COALESCE(
+    (
+      SELECT MIN(st.show_time)
+      FROM show_times st
+      WHERE st.show_id = {$showAlias}.id
+        AND st.show_time >= UTC_TIMESTAMP()
+    ),
+    CASE
+      WHEN {$showAlias}.start_date IS NOT NULL AND {$showAlias}.start_date >= UTC_DATE()
+        THEN {$showAlias}.start_date
+      ELSE NULL
+    END,
+    '9999-12-31'
+  )";
+}
+
 function listing_card_select_sql(bool $withShowTimes = true): string
 {
   $activeSh = active_show_sql('sh');
+  $nextShowSort = listing_next_show_sort_sql('sh');
   $eventDateSql = $withShowTimes
     ? "(
       SELECT COALESCE(
@@ -355,11 +375,13 @@ function listing_card_select_sql(bool $withShowTimes = true): string
           FROM show_times st
           JOIN shows sh ON sh.id = st.show_id
           WHERE sh.listing_id = l.id AND $activeSh
+            AND st.show_time >= UTC_TIMESTAMP()
         ),
         (
           SELECT MIN(sh.start_date)
           FROM shows sh
           WHERE sh.listing_id = l.id AND $activeSh
+            AND sh.start_date >= UTC_DATE()
         )
       )
     )"
@@ -367,6 +389,7 @@ function listing_card_select_sql(bool $withShowTimes = true): string
       SELECT MIN(sh.start_date)
       FROM shows sh
       WHERE sh.listing_id = l.id AND $activeSh
+        AND sh.start_date >= UTC_DATE()
     )";
 
   return "
@@ -380,14 +403,14 @@ function listing_card_select_sql(bool $withShowTimes = true): string
       JOIN places p ON p.id = sh.place_id
       JOIN cities c ON c.id = p.city_id
       WHERE sh.listing_id = l.id AND $activeSh
-      ORDER BY COALESCE(sh.start_date, '9999-12-31') ASC, sh.id ASC
+      ORDER BY {$nextShowSort} ASC, sh.id ASC
       LIMIT 1
     ) AS event_location,
     (
       SELECT sh.booking_url
       FROM shows sh
       WHERE sh.listing_id = l.id AND $activeSh AND sh.booking_url IS NOT NULL AND sh.booking_url <> ''
-      ORDER BY COALESCE(sh.start_date, '9999-12-31') ASC, sh.id ASC
+      ORDER BY {$nextShowSort} ASC, sh.id ASC
       LIMIT 1
     ) AS booking_url
   ";
@@ -721,7 +744,7 @@ if ($method === 'GET' && $path === '/listings') {
     $params[':country_name'] = $countryName;
   }
 
-  $orderBy = 'COALESCE(l.publish_at, l.created_at) DESC';
+  $orderBy = 'event_date IS NULL ASC, event_date ASC, COALESCE(l.publish_at, l.created_at) DESC';
   $page = max(1, (int)($_GET['page'] ?? 1));
   $perPage = min(48, max(1, (int)($_GET['per_page'] ?? 12)));
   $total = count_listing_cards($pdo, $extra, $params);
