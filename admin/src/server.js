@@ -20,6 +20,8 @@ import { ensureListingsOrganizer } from './lib/ensureListingsOrganizer.js'
 import { ensureListingsShowCountdown } from './lib/ensureListingsShowCountdown.js'
 import { ensureListingsShowSidebarAds } from './lib/ensureListingsShowSidebarAds.js'
 import { ensureListingsRatingDisplay } from './lib/ensureListingsRatingDisplay.js'
+import { ensureListingsSoldOut } from './lib/ensureListingsSoldOut.js'
+import { ensureShowTimesSoldOut } from './lib/ensureShowTimesSoldOut.js'
 import { ensureListingsSponsorBanner } from './lib/ensureListingsSponsorBanner.js'
 import { ensurePageVisitsVisitedAt } from './lib/ensurePageVisitsVisitedAt.js'
 import { ensureMainAdminPermissions } from './lib/ensureMainAdminPermissions.js'
@@ -168,12 +170,14 @@ async function start() {
 
   await waitForDatabase()
   await ensureShowTimesTable(dbPool())
+  await ensureShowTimesSoldOut(dbPool())
   await ensureBlogsSchema(dbPool())
   await ensureCmsPagesSchema(dbPool())
   await ensureListingsOrganizer(dbPool())
   await ensureListingsShowCountdown(dbPool())
   await ensureListingsShowSidebarAds(dbPool())
   await ensureListingsRatingDisplay(dbPool())
+  await ensureListingsSoldOut(dbPool())
   await ensureListingsSponsorBanner(dbPool())
   await ensurePageVisitsVisitedAt(dbPool())
   await ensureMainAdminPermissions(dbPool())

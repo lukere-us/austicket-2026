@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 320" width="900" height="320">
+  <!-- Match AUS LANKA TICKETS logo: yellow geometric display type, ticket bar -->
+  <defs>
+    <!-- Geometric display letters matching AUS LANKA style (no-bar A) -->
+    <style>
+      .word {
+        fill: #F5D800;
+      }
+      .tickets {
+        fill: #1A2656;
+        font-family: Arial Black, Helvetica Black, Impact, sans-serif;
+        font-size: 52px;
+        font-weight: 900;
+        letter-spacing: 0.28em;
+      }
+    </style>
+  </defs>
+
+  <!-- Black top background -->
+  <rect width="900" height="320" fill="#000000"/>
+
+  <!-- NZ LANKA  geometric paths, same weight/feel as AUS LANKA -->
+  <g class="word" transform="translate(70, 48)">
+    <!-- N -->
+    <path d="M0 0 H28 V118 L72 0 H100 V155 H72 V37 L28 155 H0 Z"/>
+    <!-- Z -->
+    <path d="M120 0 H220 V28 H168 L220 127 V155 H120 V127 H172 L120 28 Z"/>
+    <!-- space ~40 -->
+    <!-- L -->
+    <path d="M260 0 H288 V127 H360 V155 H260 Z"/>
+    <!-- A (no crossbar  inverted V) -->
+    <path d="M372 155 L422 0 H450 L500 155 H470 L435 42 L400 155 Z"/>
+    <!-- N -->
+    <path d="M520 0 H548 V118 L592 0 H620 V155 H592 V37 L548 155 H520 Z"/>
+    <!-- K -->
+    <path d="M640 0 H668 V68 L720 0 H754 L690 78 L754 155 H720 L668 88 V155 H640 Z"/>
+    <!-- A (no crossbar) -->
+    <path d="M772 155 L822 0 H850 L900 155 H870 L835 42 L800 155 Z"/>
+  </g>
+
+  <!-- Scale/center the wordmark group to fit like AUS LANKA -->
+  <!-- Recentered wordmark for better proportions -->
+</svg>

@@ -256,6 +256,7 @@ CREATE TABLE IF NOT EXISTS show_times (
   show_id BIGINT UNSIGNED NOT NULL,
   show_time DATETIME NOT NULL,
   notes VARCHAR(255) NULL,
+  is_sold_out TINYINT(1) NOT NULL DEFAULT 0,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_show_times_show (show_id),

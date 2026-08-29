@@ -410,6 +410,18 @@ export async function buildAdminJs() {
           obj[key] = 0
         }
       }
+      if (!Object.prototype.hasOwnProperty.call(obj, 'is_sold_out') || listingEmptyFormValue(obj.is_sold_out)) {
+        obj.is_sold_out = 0
+      } else if (
+        obj.is_sold_out === true ||
+        obj.is_sold_out === 'true' ||
+        obj.is_sold_out === '1' ||
+        obj.is_sold_out === 1
+      ) {
+        obj.is_sold_out = 1
+      } else {
+        obj.is_sold_out = 0
+      }
     }
 
     normalize(request.payload)
@@ -830,11 +842,17 @@ export async function buildAdminJs() {
           const showTime = t?.show_time ? String(t.show_time) : null
           if (!showTime) continue
           const notes = t?.notes ? String(t.notes) : null
-          await conn.execute(`INSERT INTO show_times (show_id, show_time, notes) VALUES (?, ?, ?)`, [
-            showId,
-            showTime,
-            notes,
-          ])
+          const timeSoldOut =
+            t?.is_sold_out === true ||
+            t?.is_sold_out === 'true' ||
+            t?.is_sold_out === '1' ||
+            t?.is_sold_out === 1
+              ? 1
+              : 0
+          await conn.execute(
+            `INSERT INTO show_times (show_id, show_time, notes, is_sold_out) VALUES (?, ?, ?, ?)`,
+            [showId, showTime, notes, timeSoldOut],
+          )
         }
       }
 
@@ -906,6 +924,7 @@ export async function buildAdminJs() {
         `
           SELECT type_id, title, slug, description_html, banner_image, detail_banner_image, trailer_url,
                  organizer_partner_id, show_countdown, show_sidebar_ads, show_rating, show_ratings_comments,
+                 is_sold_out,
                  sponsor_banner_image, sponsor_banner_url,
                  status, publish_at, unpublish_at
           FROM listings WHERE id = ?
@@ -925,10 +944,11 @@ export async function buildAdminJs() {
           INSERT INTO listings
             (type_id, title, slug, description_html, banner_image, detail_banner_image, trailer_url,
              organizer_partner_id, show_countdown, show_sidebar_ads, show_rating, show_ratings_comments,
+             is_sold_out,
              sponsor_banner_image, sponsor_banner_url,
              status, publish_at, unpublish_at, created_by_admin_id, updated_by_admin_id,
              created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         [
           src.type_id,
@@ -943,6 +963,7 @@ export async function buildAdminJs() {
           src.show_sidebar_ads == null ? 1 : Number(src.show_sidebar_ads) ? 1 : 0,
           src.show_rating == null ? 1 : Number(src.show_rating) ? 1 : 0,
           src.show_ratings_comments == null ? 1 : Number(src.show_ratings_comments) ? 1 : 0,
+          src.is_sold_out == null ? 0 : Number(src.is_sold_out) ? 1 : 0,
           src.sponsor_banner_image ?? null,
           src.sponsor_banner_url ?? null,
           src.status,
@@ -1010,15 +1031,19 @@ export async function buildAdminJs() {
         if (!newShowId) continue
 
         const [timeRows] = await conn.execute(
-          `SELECT show_time, notes FROM show_times WHERE show_id = ? ORDER BY id ASC`,
+          `SELECT show_time, notes, is_sold_out FROM show_times WHERE show_id = ? ORDER BY id ASC`,
           [show.id]
         )
         for (const t of Array.isArray(timeRows) ? timeRows : []) {
-          await conn.execute(`INSERT INTO show_times (show_id, show_time, notes) VALUES (?, ?, ?)`, [
-            newShowId,
-            t.show_time,
-            t.notes,
-          ])
+          await conn.execute(
+            `INSERT INTO show_times (show_id, show_time, notes, is_sold_out) VALUES (?, ?, ?, ?)`,
+            [
+              newShowId,
+              t.show_time,
+              t.notes,
+              t.is_sold_out == null ? 0 : Number(t.is_sold_out) ? 1 : 0,
+            ],
+          )
         }
       }
 
@@ -1378,6 +1403,12 @@ export async function buildAdminJs() {
               isRequired: false,
               isVisible: { list: false, filter: false, show: true, edit: false, new: false },
               props: { label: 'Show Ratings & comments' },
+            },
+            is_sold_out: {
+              type: 'boolean',
+              isRequired: false,
+              isVisible: { list: false, filter: false, show: true, edit: false, new: false },
+              props: { label: 'Sold out' },
             },
             organizer_partner_id: {
               type: 'string',
@@ -1864,6 +1895,11 @@ export async function buildAdminJs() {
         navigation: null,
         properties: {
           show_id: { reference: 'shows' },
+          is_sold_out: {
+            type: 'boolean',
+            isRequired: false,
+            props: { label: 'Sold out' },
+          },
           created_at: { isVisible: false },
         },
         actions: {

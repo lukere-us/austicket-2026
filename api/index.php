@@ -248,13 +248,18 @@ function attach_show_times_to_shows(PDO $pdo, array $shows): array
 
   $showIds = array_map(fn($s) => (string)$s['id'], $shows);
   $in = implode(',', array_fill(0, count($showIds), '?'));
-  $stmt = $pdo->prepare("SELECT id, show_id, show_time, notes FROM show_times WHERE show_id IN ($in) ORDER BY show_time ASC");
+  $soldOutReady = show_times_sold_out_column_ready($pdo);
+  $selectCols = $soldOutReady
+    ? 'id, show_id, show_time, notes, is_sold_out'
+    : 'id, show_id, show_time, notes';
+  $stmt = $pdo->prepare("SELECT $selectCols FROM show_times WHERE show_id IN ($in) ORDER BY show_time ASC");
   $stmt->execute($showIds);
   $times = $stmt->fetchAll();
   $byShow = [];
   foreach ($times as $t) {
     $sid = (string)$t['show_id'];
     if (!isset($byShow[$sid])) $byShow[$sid] = [];
+    $t['is_sold_out'] = $soldOutReady && ((int)($t['is_sold_out'] ?? 0) === 1) ? 1 : 0;
     $byShow[$sid][] = $t;
   }
   foreach ($shows as &$s) {
@@ -337,6 +342,30 @@ function show_times_table_ready(PDO $pdo): bool
   try {
     $pdo->query('SELECT 1 FROM show_times LIMIT 1');
     $ready = true;
+  } catch (Throwable) {
+    $ready = false;
+  }
+
+  return $ready;
+}
+
+function show_times_sold_out_column_ready(PDO $pdo): bool
+{
+  static $ready = null;
+  if ($ready !== null) {
+    return $ready;
+  }
+
+  try {
+    $stmt = $pdo->query("
+      SELECT COUNT(*) AS cnt
+      FROM information_schema.columns
+      WHERE table_schema = DATABASE()
+        AND table_name = 'show_times'
+        AND column_name = 'is_sold_out'
+    ");
+    $row = $stmt ? $stmt->fetch() : null;
+    $ready = ((int)($row['cnt'] ?? 0) > 0);
   } catch (Throwable) {
     $ready = false;
   }
@@ -949,6 +978,7 @@ if ($method === 'GET' && preg_match('#^/listings/([^/]+)$#', $path, $m)) {
   $listing['show_sidebar_ads'] = ((int)($listing['show_sidebar_ads'] ?? 1) === 1) ? 1 : 0;
   $listing['show_rating'] = ((int)($listing['show_rating'] ?? 1) === 1) ? 1 : 0;
   $listing['show_ratings_comments'] = ((int)($listing['show_ratings_comments'] ?? 1) === 1) ? 1 : 0;
+  $listing['is_sold_out'] = ((int)($listing['is_sold_out'] ?? 0) === 1) ? 1 : 0;
   $sponsorImage = trim((string)($listing['sponsor_banner_image'] ?? ''));
   $sponsorUrl = trim((string)($listing['sponsor_banner_url'] ?? ''));
   $listing['sponsor_banner_image'] = $sponsorImage !== '' ? $sponsorImage : null;

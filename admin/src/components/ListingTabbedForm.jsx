@@ -127,6 +127,8 @@ function makeEmptyShow() {
 						"",
 					notes:
 						"",
+					is_sold_out:
+						false,
 				},
 			],
 	};
@@ -146,6 +148,7 @@ function buildRecordState(
 				show_sidebar_ads: true,
 				show_rating: true,
 				show_ratings_comments: true,
+				is_sold_out: false,
 			},
 			errors:
 				{},
@@ -221,6 +224,16 @@ function buildRecordState(
 			""
 	) {
 		params.show_ratings_comments = true;
+	}
+	if (
+		params.is_sold_out ===
+			undefined ||
+		params.is_sold_out ===
+			null ||
+		params.is_sold_out ===
+			""
+	) {
+		params.is_sold_out = false;
 	}
 	for (const key of [
 		"publish_at",
@@ -334,6 +347,11 @@ function normalizeShowPayload(
 											notes:
 												t?.notes ??
 												"",
+											is_sold_out:
+												listingFlagOn(
+													t?.is_sold_out,
+													false,
+												),
 										}),
 									)
 								: [
@@ -342,6 +360,8 @@ function normalizeShowPayload(
 												"",
 											notes:
 												"",
+											is_sold_out:
+												false,
 										},
 									],
 					}),
@@ -861,6 +881,29 @@ function sanitizeListingFormParams(
 		out.show_ratings_comments = false;
 	}
 	if (
+		out.is_sold_out ===
+			undefined ||
+		out.is_sold_out ===
+			null ||
+		out.is_sold_out ===
+			""
+	) {
+		out.is_sold_out = false;
+	} else if (
+		out.is_sold_out ===
+			true ||
+		out.is_sold_out ===
+			"true" ||
+		out.is_sold_out ===
+			"1" ||
+		out.is_sold_out ===
+			1
+	) {
+		out.is_sold_out = true;
+	} else {
+		out.is_sold_out = false;
+	}
+	if (
 		out.organizer_partner_id ===
 			undefined ||
 		out.organizer_partner_id ===
@@ -898,6 +941,7 @@ const LISTING_SAVE_KEYS = [
 		"show_sidebar_ads",
 		"show_rating",
 		"show_ratings_comments",
+		"is_sold_out",
 		"publish_at",
 		"unpublish_at",
 	];
@@ -996,6 +1040,13 @@ function normalizeShowsPayloadForSave(
 												t.show_time,
 											) ||
 											"",
+										is_sold_out:
+											listingFlagOn(
+												t.is_sold_out,
+												false,
+											)
+												? 1
+												: 0,
 									}),
 								)
 							: [],
@@ -2839,6 +2890,8 @@ export default function ListingTabbedForm(
 					p.propertyPath !==
 						"show_ratings_comments" &&
 					p.propertyPath !==
+						"is_sold_out" &&
+					p.propertyPath !==
 						"description_html" &&
 					p.propertyPath !==
 						"created_at" &&
@@ -3814,6 +3867,13 @@ export default function ListingTabbedForm(
 															?.params
 															?.notes ??
 														"",
+													is_sold_out:
+														listingFlagOn(
+															t
+																?.params
+																?.is_sold_out,
+															false,
+														),
 												}),
 											)
 										: [
@@ -3822,6 +3882,8 @@ export default function ListingTabbedForm(
 														"",
 													notes:
 														"",
+													is_sold_out:
+														false,
 												},
 											],
 							},
@@ -4387,6 +4449,8 @@ export default function ListingTabbedForm(
 															"",
 														notes:
 															"",
+														is_sold_out:
+															false,
 													},
 												],
 										}
@@ -4973,6 +5037,12 @@ export default function ListingTabbedForm(
 									key: "show_ratings_comments",
 									label: "Show Ratings & comments",
 									defaultOn: true,
+								},
+								{
+									id: "listing-is-sold-out",
+									key: "is_sold_out",
+									label: "Sold out",
+									defaultOn: false,
 								},
 							].map((toggle) => {
 								const on = listingFlagOn(
@@ -6024,6 +6094,50 @@ export default function ListingTabbedForm(
 																			"100%",
 																	}}
 																/>
+															</Box>
+
+															<Box
+																mt="md"
+																className="listing-form__toggles listing-form__toggles--row"
+															>
+																<div className="listing-form__toggle">
+																	<CheckBox
+																		id={`listing-show-${showIdx}-time-${timeIdx}-sold-out`}
+																		checked={listingFlagOn(
+																			t.is_sold_out,
+																			false,
+																		)}
+																		onChange={(e) =>
+																			updateTime(
+																				showIdx,
+																				timeIdx,
+																				"is_sold_out",
+																				e.target.checked
+																					? 1
+																					: 0,
+																			)
+																		}
+																	/>
+																	<button
+																		type="button"
+																		className="listing-form__toggle-label"
+																		onClick={() =>
+																			updateTime(
+																				showIdx,
+																				timeIdx,
+																				"is_sold_out",
+																				listingFlagOn(
+																					t.is_sold_out,
+																					false,
+																				)
+																					? 0
+																					: 1,
+																			)
+																		}
+																	>
+																		Sold out
+																	</button>
+																</div>
 															</Box>
 														</Box>
 													),
