@@ -10,3 +10,4 @@ sql/
 api/config.php
 *.sql
 *.gz
+api/config.php
