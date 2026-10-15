@@ -5,7 +5,7 @@ declare(strict_types=1);
 define('host', 'localhost');
 define('user', 'root');
 define('pwd', '');
-define('db', 'aus-booking');
+define('db', 'aus-booking-live');
 
 // Change this in production
 define('JWT_SECRET', 'change-me-in-production');

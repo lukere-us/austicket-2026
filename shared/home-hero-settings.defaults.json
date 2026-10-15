@@ -38,12 +38,16 @@
   "scrimGradientBottomOpacity": 90,
   "scrimSideOpacity": 55,
   "counterTicketsBase": 0,
+  "counterTicketsStatic": false,
   "counterTicketsLabel": "Ticket Booked with us",
   "counterAusBase": 0,
+  "counterAusStatic": false,
   "counterAusLabel": "Listed event in AUS",
   "counterNzBase": 0,
+  "counterNzStatic": false,
   "counterNzLabel": "Listed event In NZ",
   "counterCustomersBase": 0,
+  "counterCustomersStatic": false,
   "counterCustomersLabel": "Happy Customers",
   "counterAnimationMs": 2000
 }

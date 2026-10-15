@@ -10,6 +10,20 @@ import {
   mergeHomeHeroSettings,
 } from '../lib/homeHeroSettings.shared.js'
 
+function groupFieldsByBlock(fields) {
+  const chunks = []
+  for (const field of fields) {
+    const block = field.block || null
+    const last = chunks[chunks.length - 1]
+    if (block && last && last.block === block) {
+      last.fields.push(field)
+    } else {
+      chunks.push({ block, fields: [field] })
+    }
+  }
+  return chunks
+}
+
 export default function SliderBannerSettings() {
   const sendNotice = useNotice()
   const sendNoticeRef = useRef(sendNotice)
@@ -154,14 +168,29 @@ export default function SliderBannerSettings() {
                 style={{ background: '#fff', border: '1px solid rgba(0,0,0,0.06)' }}
               >
                 <H4 mb="lg">{group.label}</H4>
-                {group.fields.map((field) => (
-                  <SettingsFieldRow
-                    key={field.key}
-                    field={field}
-                    value={settings[field.key]}
-                    onChange={onChange}
-                  />
-                ))}
+                {groupFieldsByBlock(group.fields).map((chunk) => {
+                  const rows = chunk.fields.map((field) => (
+                    <SettingsFieldRow
+                      key={field.key}
+                      field={field}
+                      value={settings[field.key]}
+                      onChange={onChange}
+                    />
+                  ))
+                  if (!chunk.block) return rows
+                  return (
+                    <Box
+                      key={`block-${chunk.block}`}
+                      className="admin-settings-block"
+                      p="lg"
+                      mb="lg"
+                      borderRadius="lg"
+                      style={{ paddingBottom: 0 }}
+                    >
+                      {rows}
+                    </Box>
+                  )
+                })}
               </Box>
             ))}
           </Box>

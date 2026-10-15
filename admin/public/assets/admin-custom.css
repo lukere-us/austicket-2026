@@ -1740,6 +1740,14 @@ html.admin-theme-dark form [style*="background:#f8fafc"] {
   color: #e2e8f0 !important;
 }
 
+.admin-settings-block {
+  border: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+html.admin-theme-dark .admin-settings-block {
+  border-color: #475569 !important;
+}
+
 /* Default AdminJS edit/new form white card */
 html.admin-theme-dark [data-css="form"] > [class*="Box"],
 html.admin-theme-dark form[data-css="form"],

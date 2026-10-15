@@ -38,10 +38,12 @@ function build_home_hero_counters(PDO $pdo, ?array $settings = null): array
 {
   $settings = $settings ?? load_home_hero_settings($pdo);
 
-  $ticketsLive = home_hero_count_booking_clicks($pdo);
-  $ausLive = home_hero_count_visible_listings_for_country($pdo, 'Australia');
-  $nzLive = home_hero_count_visible_listings_for_country($pdo, 'New Zealand');
-  $customersLive = home_hero_count_registered_users($pdo);
+  $isStatic = static fn (string $key): bool => site_settings_bool($settings[$key] ?? false, false);
+
+  $ticketsLive = $isStatic('counterTicketsStatic') ? 0 : home_hero_count_booking_clicks($pdo);
+  $ausLive = $isStatic('counterAusStatic') ? 0 : home_hero_count_visible_listings_for_country($pdo, 'Australia');
+  $nzLive = $isStatic('counterNzStatic') ? 0 : home_hero_count_visible_listings_for_country($pdo, 'New Zealand');
+  $customersLive = $isStatic('counterCustomersStatic') ? 0 : home_hero_count_registered_users($pdo);
 
   $ticketsBase = max(0, (int)($settings['counterTicketsBase'] ?? 0));
   $ausBase = max(0, (int)($settings['counterAusBase'] ?? 0));
