@@ -7,7 +7,17 @@ const DEFAULTS = {
   facebookPixelId: '',
   customHeadHtml: '',
   customBodyEndHtml: '',
+  trybookingRegion: 'au',
+  trybookingApiKey: '',
+  trybookingSecretKey: '',
 }
+
+export const TRYBOOKING_REGIONS = [
+  { value: 'au', label: 'Australia (au)' },
+  { value: 'nz', label: 'New Zealand (nz)' },
+  { value: 'uk', label: 'United Kingdom (uk)' },
+  { value: 'us', label: 'United States (us)' },
+]
 
 export const FIELD_GROUPS = [
   {
@@ -60,6 +70,31 @@ export const FIELD_GROUPS = [
       },
     ],
   },
+  {
+    id: 'trybooking',
+    label: 'TryBooking API',
+    fields: [
+      {
+        key: 'trybookingRegion',
+        label: 'Account region',
+        type: 'select',
+        options: TRYBOOKING_REGIONS,
+        help: 'Region of your TryBooking account. Used in the API URL (https://api.trybooking.com/{region}/reporting/v1).',
+      },
+      {
+        key: 'trybookingApiKey',
+        label: 'API Key',
+        type: 'text',
+        help: 'Generated in the TryBooking Portal under Integration Tools > API Management.',
+      },
+      {
+        key: 'trybookingSecretKey',
+        label: 'Secret Key',
+        type: 'password',
+        help: 'Secret Key paired with the API Key. Stored server-side only and never sent to the public site.',
+      },
+    ],
+  },
 ]
 
 function cloneText(value, fallback = '') {
@@ -80,6 +115,11 @@ function normalizeTrackingId(raw) {
     .replace(/^["']+|["']+$/g, '')
 }
 
+function normalizeTrybookingRegion(raw) {
+  const value = String(raw ?? '').trim().toLowerCase()
+  return TRYBOOKING_REGIONS.some((r) => r.value === value) ? value : DEFAULTS.trybookingRegion
+}
+
 export function defaultGeneralSettings() {
   return { ...DEFAULTS }
 }
@@ -93,6 +133,9 @@ export function mergeGeneralSettings(input) {
     facebookPixelId: normalizeTrackingId(src.facebookPixelId),
     customHeadHtml: cloneText(src.customHeadHtml, ''),
     customBodyEndHtml: cloneText(src.customBodyEndHtml, ''),
+    trybookingRegion: normalizeTrybookingRegion(src.trybookingRegion),
+    trybookingApiKey: normalizeTrackingId(src.trybookingApiKey),
+    trybookingSecretKey: normalizeTrackingId(src.trybookingSecretKey),
   }
 }
 

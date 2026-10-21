@@ -16,6 +16,7 @@ require_once __DIR__ . '/lib/partners_settings.php';
 require_once __DIR__ . '/lib/ads_settings.php';
 require_once __DIR__ . '/lib/youtube_carousel_settings.php';
 require_once __DIR__ . '/lib/general_settings.php';
+require_once __DIR__ . '/lib/trybooking.php';
 require_once __DIR__ . '/lib/blogs.php';
 require_once __DIR__ . '/lib/cms_pages.php';
 require_once __DIR__ . '/lib/home_hero_stats.php';
@@ -879,6 +880,40 @@ if ($method === 'GET' && $path === '/listings/search') {
   json_response(['items' => $items]);
 }
 
+// Public: live seat availability per show, from TryBooking (only aggregate seat counts are exposed)
+if ($method === 'GET' && preg_match('#^/listings/([0-9]+)/availability$#', $path, $m)) {
+  $pdo = db();
+  $stmt = $pdo->prepare("SELECT * FROM listings WHERE id = :id LIMIT 1");
+  $stmt->execute([':id' => (int)$m[1]]);
+  $listing = $stmt->fetch();
+  if (!$listing || !is_listing_visible_row($listing)) {
+    json_response(['error' => 'not_found'], 404);
+  }
+
+  $out = [];
+  $statsEnabled = (int)($listing['show_trybooking_stats'] ?? 1) === 1;
+  $creds = $statsEnabled ? trybooking_credentials_for_partner($pdo, $listing['organizer_partner_id'] ?? null) : null;
+  if ($creds !== null) {
+    $stmt = $pdo->prepare("SELECT id, booking_url FROM shows WHERE listing_id = :id ORDER BY start_date ASC, id ASC");
+    $stmt->execute([':id' => (int)$listing['id']]);
+    $totalsByEvent = [];
+    foreach ($stmt->fetchAll() as $show) {
+      $eventId = trybooking_event_id_from_url($show['booking_url'] ?? null);
+      if ($eventId === null) continue;
+      if (!array_key_exists($eventId, $totalsByEvent)) {
+        $event = trybooking_fetch_event($creds, $eventId);
+        $totalsByEvent[$eventId] = $event !== null ? trybooking_event_seat_totals($event) : null;
+      }
+      if ($totalsByEvent[$eventId] !== null) {
+        $out[(string)$show['id']] = $totalsByEvent[$eventId];
+      }
+    }
+  }
+
+  header('Cache-Control: public, max-age=30');
+  json_response(['shows' => (object)$out]);
+}
+
 // Public: listing detail
 if ($method === 'GET' && preg_match('#^/listings/([^/]+)$#', $path, $m)) {
   $slug = $m[1];
@@ -978,6 +1013,7 @@ if ($method === 'GET' && preg_match('#^/listings/([^/]+)$#', $path, $m)) {
   $listing['show_sidebar_ads'] = ((int)($listing['show_sidebar_ads'] ?? 1) === 1) ? 1 : 0;
   $listing['show_rating'] = ((int)($listing['show_rating'] ?? 1) === 1) ? 1 : 0;
   $listing['show_ratings_comments'] = ((int)($listing['show_ratings_comments'] ?? 1) === 1) ? 1 : 0;
+  $listing['show_trybooking_stats'] = ((int)($listing['show_trybooking_stats'] ?? 1) === 1) ? 1 : 0;
   $listing['is_sold_out'] = ((int)($listing['is_sold_out'] ?? 0) === 1) ? 1 : 0;
   $sponsorImage = trim((string)($listing['sponsor_banner_image'] ?? ''));
   $sponsorUrl = trim((string)($listing['sponsor_banner_url'] ?? ''));
@@ -1540,7 +1576,7 @@ if ($method === 'GET' && $path === '/settings/partners') {
   header('Cache-Control: no-store, no-cache, must-revalidate');
   header('Pragma: no-cache');
   $pdo = db();
-  json_response(['settings' => load_partners_settings($pdo)]);
+  json_response(['settings' => partners_public_settings(load_partners_settings($pdo))]);
 }
 
 if ($method === 'GET' && $path === '/settings/ads') {
@@ -1561,7 +1597,7 @@ if ($method === 'GET' && $path === '/settings/general') {
   header('Cache-Control: no-store, no-cache, must-revalidate');
   header('Pragma: no-cache');
   $pdo = db();
-  json_response(['settings' => load_general_settings($pdo)]);
+  json_response(['settings' => general_public_settings(load_general_settings($pdo))]);
 }
 
 if ($method === 'GET' && $path === '/blogs/home') {

@@ -87,7 +87,8 @@ export function SettingsFieldRow({ field, value, onChange }) {
         id={id}
         name={field.key}
         className="admin-field-control"
-        type={field.type === 'number' ? 'number' : 'text'}
+        type={field.type === 'number' || field.type === 'password' ? field.type : 'text'}
+        autoComplete={field.type === 'password' ? 'new-password' : undefined}
         value={displayValue}
         min={field.min}
         max={field.max}

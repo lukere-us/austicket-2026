@@ -32,9 +32,26 @@ function partners_clone_logos(array $items): array
       'imageUrl' => $imageUrl,
       'linkUrl' => trim((string)($item['linkUrl'] ?? '')),
       'enabled' => !array_key_exists('enabled', $item) || site_settings_bool($item['enabled'], true),
+      'trybookingRegion' => general_normalize_trybooking_region($item['trybookingRegion'] ?? ''),
+      'trybookingApiKey' => general_normalize_tracking_id($item['trybookingApiKey'] ?? ''),
+      'trybookingSecretKey' => general_normalize_tracking_id($item['trybookingSecretKey'] ?? ''),
     ];
   }
   return $out;
+}
+
+/** Partners settings safe for the unauthenticated public API (TryBooking keys removed). */
+function partners_public_settings(array $settings): array
+{
+  if (isset($settings['logos']) && is_array($settings['logos'])) {
+    $settings['logos'] = array_map(static function ($logo) {
+      if (is_array($logo)) {
+        unset($logo['trybookingApiKey'], $logo['trybookingSecretKey'], $logo['trybookingRegion']);
+      }
+      return $logo;
+    }, $settings['logos']);
+  }
+  return $settings;
 }
 
 function partners_merge_settings(array $input): array

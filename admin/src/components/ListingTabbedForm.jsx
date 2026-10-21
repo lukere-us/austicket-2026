@@ -148,6 +148,7 @@ function buildRecordState(
 				show_sidebar_ads: true,
 				show_rating: true,
 				show_ratings_comments: true,
+				show_trybooking_stats: true,
 				is_sold_out: false,
 			},
 			errors:
@@ -224,6 +225,16 @@ function buildRecordState(
 			""
 	) {
 		params.show_ratings_comments = true;
+	}
+	if (
+		params.show_trybooking_stats ===
+			undefined ||
+		params.show_trybooking_stats ===
+			null ||
+		params.show_trybooking_stats ===
+			""
+	) {
+		params.show_trybooking_stats = true;
 	}
 	if (
 		params.is_sold_out ===
@@ -881,6 +892,29 @@ function sanitizeListingFormParams(
 		out.show_ratings_comments = false;
 	}
 	if (
+		out.show_trybooking_stats ===
+			undefined ||
+		out.show_trybooking_stats ===
+			null ||
+		out.show_trybooking_stats ===
+			""
+	) {
+		out.show_trybooking_stats = true;
+	} else if (
+		out.show_trybooking_stats ===
+			true ||
+		out.show_trybooking_stats ===
+			"true" ||
+		out.show_trybooking_stats ===
+			"1" ||
+		out.show_trybooking_stats ===
+			1
+	) {
+		out.show_trybooking_stats = true;
+	} else {
+		out.show_trybooking_stats = false;
+	}
+	if (
 		out.is_sold_out ===
 			undefined ||
 		out.is_sold_out ===
@@ -941,6 +975,7 @@ const LISTING_SAVE_KEYS = [
 		"show_sidebar_ads",
 		"show_rating",
 		"show_ratings_comments",
+		"show_trybooking_stats",
 		"is_sold_out",
 		"publish_at",
 		"unpublish_at",
@@ -2889,6 +2924,8 @@ export default function ListingTabbedForm(
 						"show_rating" &&
 					p.propertyPath !==
 						"show_ratings_comments" &&
+					p.propertyPath !==
+						"show_trybooking_stats" &&
 					p.propertyPath !==
 						"is_sold_out" &&
 					p.propertyPath !==
@@ -5036,6 +5073,12 @@ export default function ListingTabbedForm(
 									id: "listing-show-ratings-comments",
 									key: "show_ratings_comments",
 									label: "Show Ratings & comments",
+									defaultOn: true,
+								},
+								{
+									id: "listing-show-trybooking-stats",
+									key: "show_trybooking_stats",
+									label: "Show TryBooking seats & sales",
 									defaultOn: true,
 								},
 								{

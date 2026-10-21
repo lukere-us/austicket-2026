@@ -102,7 +102,8 @@ export default function GeneralSettings() {
       <H2>General</H2>
       <Text variant="sm" color="grey60" mt="sm" mb="xl">
         Site-wide analytics and tracking. Paste Google Analytics, Tag Manager, Meta Pixel IDs, or custom embed
-        snippets. Scripts appear on every public page when enabled.
+        snippets. Scripts appear on every public page when enabled. TryBooking API credentials are kept private to
+        the server.
       </Text>
 
       {loading ? (

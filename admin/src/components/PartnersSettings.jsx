@@ -6,6 +6,7 @@ import { PartnerLogoUpload } from './PartnerLogoUpload.jsx'
 import { SettingsFieldRow } from './SettingsFieldRow.jsx'
 import { readPartnersFormValues } from '../lib/readSettingsForm.js'
 import {
+  TRYBOOKING_REGION_OPTIONS,
   defaultPartnersSettings,
   partnersSettingFields,
   mergePartnersSettings,
@@ -46,7 +47,16 @@ function PartnerLogoRowsEditor({ rows, onChange }) {
   const addRow = () => {
     onChange([
       ...rows,
-      { id: newLogoId(), name: '', imageUrl: '', linkUrl: '', enabled: true },
+      {
+        id: newLogoId(),
+        name: '',
+        imageUrl: '',
+        linkUrl: '',
+        enabled: true,
+        trybookingRegion: 'au',
+        trybookingApiKey: '',
+        trybookingSecretKey: '',
+      },
     ])
   }
 
@@ -125,6 +135,58 @@ function PartnerLogoRowsEditor({ rows, onChange }) {
                 />
                 Show
               </label>
+            </Box>
+          </Box>
+
+          <Box mt="lg" pt="md" style={{ borderTop: '1px dashed #e4e4e7' }}>
+            <Text variant="sm" fontWeight="bold" mb="xs">
+              TryBooking API (optional)
+            </Text>
+            <Text variant="sm" color="grey60" mb="md">
+              Keys for this organizer&apos;s TryBooking account. Listings with this partner as organizer use them for
+              the live seats &amp; tickets-sold display on the event page; if left blank, the keys in Site settings
+              &gt; General are used.
+            </Text>
+            <Box display="grid" style={{ gridTemplateColumns: '180px 1fr 1fr', gap: 12 }}>
+              <Box>
+                <Text variant="sm" mb="sm">
+                  Account region
+                </Text>
+                <select
+                  style={rowInputStyle}
+                  value={row.trybookingRegion || 'au'}
+                  onChange={(e) => updateRow(index, { trybookingRegion: e.target.value })}
+                >
+                  {TRYBOOKING_REGION_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </Box>
+              <Box>
+                <Text variant="sm" mb="sm">
+                  API Key
+                </Text>
+                <input
+                  style={rowInputStyle}
+                  value={row.trybookingApiKey || ''}
+                  onChange={(e) => updateRow(index, { trybookingApiKey: e.target.value })}
+                  autoComplete="off"
+                />
+              </Box>
+              <Box>
+                <Text variant="sm" mb="sm">
+                  Secret Key
+                </Text>
+                <input
+                  type="password"
+                  style={rowInputStyle}
+                  value={row.trybookingSecretKey || ''}
+                  onChange={(e) => updateRow(index, { trybookingSecretKey: e.target.value })}
+                  autoComplete="new-password"
+                />
+              </Box>
             </Box>
           </Box>
         </Box>
@@ -240,7 +302,8 @@ export default function PartnersSettings() {
       <H2>Partners slider</H2>
       <Text variant="sm" color="grey60" mt="sm" mb="xl">
         Manage the &quot;Our partners&quot; logo carousel on the homepage. Upload partner logos and adjust
-        scroll speed, spacing, loading sequence, and display options.
+        scroll speed, spacing, loading sequence, and display options. Each partner can also hold TryBooking API
+        keys, which stay private to the admin.
       </Text>
 
       <form ref={formRef} key={formKey} onSubmit={(e) => e.preventDefault()}>

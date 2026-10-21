@@ -401,7 +401,7 @@ export async function buildAdminJs() {
       } else {
         obj.show_sidebar_ads = 0
       }
-      for (const key of ['show_rating', 'show_ratings_comments']) {
+      for (const key of ['show_rating', 'show_ratings_comments', 'show_trybooking_stats']) {
         if (!Object.prototype.hasOwnProperty.call(obj, key) || listingEmptyFormValue(obj[key])) {
           obj[key] = 1
         } else if (obj[key] === true || obj[key] === 'true' || obj[key] === '1' || obj[key] === 1) {
@@ -924,7 +924,7 @@ export async function buildAdminJs() {
         `
           SELECT type_id, title, slug, description_html, banner_image, detail_banner_image, trailer_url,
                  organizer_partner_id, show_countdown, show_sidebar_ads, show_rating, show_ratings_comments,
-                 is_sold_out,
+                 show_trybooking_stats, is_sold_out,
                  sponsor_banner_image, sponsor_banner_url,
                  status, publish_at, unpublish_at
           FROM listings WHERE id = ?
@@ -944,11 +944,11 @@ export async function buildAdminJs() {
           INSERT INTO listings
             (type_id, title, slug, description_html, banner_image, detail_banner_image, trailer_url,
              organizer_partner_id, show_countdown, show_sidebar_ads, show_rating, show_ratings_comments,
-             is_sold_out,
+             show_trybooking_stats, is_sold_out,
              sponsor_banner_image, sponsor_banner_url,
              status, publish_at, unpublish_at, created_by_admin_id, updated_by_admin_id,
              created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         [
           src.type_id,
@@ -963,6 +963,7 @@ export async function buildAdminJs() {
           src.show_sidebar_ads == null ? 1 : Number(src.show_sidebar_ads) ? 1 : 0,
           src.show_rating == null ? 1 : Number(src.show_rating) ? 1 : 0,
           src.show_ratings_comments == null ? 1 : Number(src.show_ratings_comments) ? 1 : 0,
+          src.show_trybooking_stats == null ? 1 : Number(src.show_trybooking_stats) ? 1 : 0,
           src.is_sold_out == null ? 0 : Number(src.is_sold_out) ? 1 : 0,
           src.sponsor_banner_image ?? null,
           src.sponsor_banner_url ?? null,
@@ -1404,6 +1405,12 @@ export async function buildAdminJs() {
               isVisible: { list: false, filter: false, show: true, edit: false, new: false },
               props: { label: 'Show Ratings & comments' },
             },
+            show_trybooking_stats: {
+              type: 'boolean',
+              isRequired: false,
+              isVisible: { list: false, filter: false, show: true, edit: false, new: false },
+              props: { label: 'Show TryBooking seats & sales' },
+            },
             is_sold_out: {
               type: 'boolean',
               isRequired: false,
@@ -1456,6 +1463,10 @@ export async function buildAdminJs() {
             },
           },
           actions: {
+            // Row clicks open `show` when it is visible, otherwise `edit`; keep `show` for view-only roles.
+            show: {
+              isVisible: ({ currentAdmin }) => !can(currentAdmin, 'listings.edit'),
+            },
             new: {
               component: Components.ListingTabbedForm,
               handler: listingNewHandler,

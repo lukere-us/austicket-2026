@@ -12,6 +12,24 @@ const DEFAULTS = {
   logos: [],
 }
 
+export const TRYBOOKING_REGION_OPTIONS = [
+  { value: 'au', label: 'Australia (au)' },
+  { value: 'nz', label: 'New Zealand (nz)' },
+  { value: 'uk', label: 'United Kingdom (uk)' },
+  { value: 'us', label: 'United States (us)' },
+]
+
+function normalizeTrybookingRegion(raw) {
+  const value = String(raw ?? '').trim().toLowerCase()
+  return TRYBOOKING_REGION_OPTIONS.some((r) => r.value === value) ? value : 'au'
+}
+
+function normalizeKey(raw) {
+  return String(raw ?? '')
+    .trim()
+    .replace(/^["']+|["']+$/g, '')
+}
+
 export const LOAD_SEQUENCE_OPTIONS = [
   { value: 'random', label: 'Random' },
   { value: 'ascending', label: 'Ascending' },
@@ -78,6 +96,9 @@ function cloneLogos(items) {
       imageUrl: String(item?.imageUrl ?? '').trim(),
       linkUrl: String(item?.linkUrl ?? '').trim(),
       enabled: item?.enabled !== false && item?.enabled !== 0 && item?.enabled !== '0',
+      trybookingRegion: normalizeTrybookingRegion(item?.trybookingRegion),
+      trybookingApiKey: normalizeKey(item?.trybookingApiKey),
+      trybookingSecretKey: normalizeKey(item?.trybookingSecretKey),
     }))
     .filter((item) => item.imageUrl)
 }
