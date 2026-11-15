@@ -59,6 +59,28 @@ function trybooking_credentials_for_partner(PDO $pdo, ?string $partnerId): ?arra
   return load_trybooking_credentials($pdo);
 }
 
+/**
+ * Credentials for a listing: the event's own keys when both are set, otherwise the organizer's
+ * (Partners slider entry) keys, otherwise Site settings > General.
+ *
+ * @return array{region: string, apiKey: string, secretKey: string}|null
+ */
+function trybooking_credentials_for_listing(PDO $pdo, array $listing): ?array
+{
+  $apiKey = trim((string)($listing['trybooking_api_key'] ?? ''));
+  $secretKey = trim((string)($listing['trybooking_secret_key'] ?? ''));
+  if ($apiKey !== '' && $secretKey !== '') {
+    $global = load_general_settings($pdo);
+    $region = trim((string)($global['trybookingRegion'] ?? ''));
+    return [
+      'region' => $region !== '' ? $region : 'au',
+      'apiKey' => $apiKey,
+      'secretKey' => $secretKey,
+    ];
+  }
+  return trybooking_credentials_for_partner($pdo, $listing['organizer_partner_id'] ?? null);
+}
+
 function trybooking_cache_path(string $key): string
 {
   $dir = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'austicket-trybooking';

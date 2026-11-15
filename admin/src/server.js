@@ -22,6 +22,7 @@ import { ensureListingsShowSidebarAds } from './lib/ensureListingsShowSidebarAds
 import { ensureListingsRatingDisplay } from './lib/ensureListingsRatingDisplay.js'
 import { ensureListingsSoldOut } from './lib/ensureListingsSoldOut.js'
 import { ensureListingsTrybookingStats } from './lib/ensureListingsTrybookingStats.js'
+import { ensureListingsTrybookingKeys } from './lib/ensureListingsTrybookingKeys.js'
 import { ensureShowTimesSoldOut } from './lib/ensureShowTimesSoldOut.js'
 import { ensureListingsSponsorBanner } from './lib/ensureListingsSponsorBanner.js'
 import { ensurePageVisitsVisitedAt } from './lib/ensurePageVisitsVisitedAt.js'
@@ -180,6 +181,7 @@ async function start() {
   await ensureListingsRatingDisplay(dbPool())
   await ensureListingsSoldOut(dbPool())
   await ensureListingsTrybookingStats(dbPool())
+  await ensureListingsTrybookingKeys(dbPool())
   await ensureListingsSponsorBanner(dbPool())
   await ensurePageVisitsVisitedAt(dbPool())
   await ensureMainAdminPermissions(dbPool())

@@ -892,7 +892,7 @@ if ($method === 'GET' && preg_match('#^/listings/([0-9]+)/availability$#', $path
 
   $out = [];
   $statsEnabled = (int)($listing['show_trybooking_stats'] ?? 1) === 1;
-  $creds = $statsEnabled ? trybooking_credentials_for_partner($pdo, $listing['organizer_partner_id'] ?? null) : null;
+  $creds = $statsEnabled ? trybooking_credentials_for_listing($pdo, $listing) : null;
   if ($creds !== null) {
     $stmt = $pdo->prepare("SELECT id, booking_url FROM shows WHERE listing_id = :id ORDER BY start_date ASC, id ASC");
     $stmt->execute([':id' => (int)$listing['id']]);
@@ -1009,6 +1009,8 @@ if ($method === 'GET' && preg_match('#^/listings/([^/]+)$#', $path, $m)) {
 
   $organizer = resolve_partner_organizer($pdo, $listing['organizer_partner_id'] ?? null);
   unset($listing['organizer_partner_id']);
+  // Never expose per-event TryBooking credentials publicly
+  unset($listing['trybooking_api_key'], $listing['trybooking_secret_key']);
   $listing['show_countdown'] = ((int)($listing['show_countdown'] ?? 1) === 1) ? 1 : 0;
   $listing['show_sidebar_ads'] = ((int)($listing['show_sidebar_ads'] ?? 1) === 1) ? 1 : 0;
   $listing['show_rating'] = ((int)($listing['show_rating'] ?? 1) === 1) ? 1 : 0;

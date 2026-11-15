@@ -955,7 +955,78 @@ function sanitizeListingFormParams(
 				out.organizer_partner_id,
 			).trim();
 	}
+	for (const key of [
+		"trybooking_api_key",
+		"trybooking_secret_key",
+	]) {
+		const v =
+			out[key] == null
+				? ""
+				: String(out[key]).trim();
+		out[key] = v === "" ? null : v;
+	}
 	return out;
+}
+
+/** Per-event TryBooking credentials (fall back to organizer / global keys when blank). */
+function TryBookingKeysFields({ apiKey, secretKey, onChange }) {
+	const [showSecret, setShowSecret] = useState(false);
+	const hasApi = String(apiKey || "").trim() !== "";
+	const hasSecret = String(secretKey || "").trim() !== "";
+	let status;
+	if (hasApi && hasSecret) {
+		status = "Using this event's own TryBooking keys.";
+	} else if (hasApi || hasSecret) {
+		status =
+			"Both keys are needed. Until both are filled in, the organizer's keys or the global keys (Site settings → General settings) are used.";
+	} else {
+		status =
+			"Blank: the organizer's keys are used if set, otherwise the global keys from Site settings → General settings.";
+	}
+	return (
+		<Box display="flex" flexDirection="column" style={{ gap: 16 }}>
+			<Box>
+				<Label htmlFor="listing-trybooking-api-key">TryBooking API key</Label>
+				<Input
+					id="listing-trybooking-api-key"
+					value={apiKey || ""}
+					onChange={(e) => onChange("trybooking_api_key", e.target.value)}
+					placeholder="Leave blank to use the global key"
+					autoComplete="off"
+					spellCheck={false}
+					style={{ width: "100%", marginTop: 8 }}
+				/>
+			</Box>
+			<Box>
+				<Label htmlFor="listing-trybooking-secret-key">TryBooking secret key</Label>
+				<Box display="flex" alignItems="center" style={{ gap: 8, marginTop: 8 }}>
+					<Input
+						id="listing-trybooking-secret-key"
+						type={showSecret ? "text" : "password"}
+						value={secretKey || ""}
+						onChange={(e) => onChange("trybooking_secret_key", e.target.value)}
+						placeholder="Leave blank to use the global secret"
+						autoComplete="new-password"
+						spellCheck={false}
+						style={{ width: "100%" }}
+					/>
+					<Button
+						type="button"
+						variant="text"
+						size="sm"
+						title={showSecret ? "Hide secret" : "Show secret"}
+						onClick={() => setShowSecret((v) => !v)}
+						style={{ flexShrink: 0 }}
+					>
+						<Icon icon={showSecret ? "EyeOff" : "Eye"} size={18} />
+					</Button>
+				</Box>
+			</Box>
+			<Text variant="sm" color="grey60">
+				{status}
+			</Text>
+		</Box>
+	);
 }
 
 const LISTING_SAVE_KEYS = [
@@ -976,6 +1047,8 @@ const LISTING_SAVE_KEYS = [
 		"show_rating",
 		"show_ratings_comments",
 		"show_trybooking_stats",
+		"trybooking_api_key",
+		"trybooking_secret_key",
 		"is_sold_out",
 		"publish_at",
 		"unpublish_at",
@@ -2926,6 +2999,10 @@ export default function ListingTabbedForm(
 						"show_ratings_comments" &&
 					p.propertyPath !==
 						"show_trybooking_stats" &&
+					p.propertyPath !==
+						"trybooking_api_key" &&
+					p.propertyPath !==
+						"trybooking_secret_key" &&
 					p.propertyPath !==
 						"is_sold_out" &&
 					p.propertyPath !==
@@ -5149,6 +5226,18 @@ export default function ListingTabbedForm(
 
 					<ListingFormSection
 						step={5}
+						title="TryBooking API keys"
+						description="Optional keys for this event's TryBooking account, used for live seat counts. Leave blank to use the global keys."
+					>
+						<TryBookingKeysFields
+							apiKey={record?.params?.trybooking_api_key}
+							secretKey={record?.params?.trybooking_secret_key}
+							onChange={(key, value) => handleListingFieldChange(key, value)}
+						/>
+					</ListingFormSection>
+
+					<ListingFormSection
+						step={6}
 						title="Description"
 						description="Public “About this event” content on the listing detail page."
 					>
@@ -5161,7 +5250,7 @@ export default function ListingTabbedForm(
 					</ListingFormSection>
 
 					<ListingFormSection
-						step={6}
+						step={7}
 						title="Cast"
 						description="People shown on the listing detail page. Type a name to search the full cast list. Manage profiles under Dashboard → Users → Cast."
 					>
