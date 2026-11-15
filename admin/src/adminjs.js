@@ -410,6 +410,11 @@ export async function buildAdminJs() {
           obj[key] = 0
         }
       }
+      for (const key of ['trybooking_api_key', 'trybooking_secret_key']) {
+        if (!Object.prototype.hasOwnProperty.call(obj, key)) continue
+        const v = obj[key] == null ? '' : String(obj[key]).trim()
+        obj[key] = v === '' ? null : v
+      }
       if (!Object.prototype.hasOwnProperty.call(obj, 'is_sold_out') || listingEmptyFormValue(obj.is_sold_out)) {
         obj.is_sold_out = 0
       } else if (
@@ -924,7 +929,7 @@ export async function buildAdminJs() {
         `
           SELECT type_id, title, slug, description_html, banner_image, detail_banner_image, trailer_url,
                  organizer_partner_id, show_countdown, show_sidebar_ads, show_rating, show_ratings_comments,
-                 show_trybooking_stats, is_sold_out,
+                 show_trybooking_stats, trybooking_api_key, trybooking_secret_key, is_sold_out,
                  sponsor_banner_image, sponsor_banner_url,
                  status, publish_at, unpublish_at
           FROM listings WHERE id = ?
@@ -944,11 +949,11 @@ export async function buildAdminJs() {
           INSERT INTO listings
             (type_id, title, slug, description_html, banner_image, detail_banner_image, trailer_url,
              organizer_partner_id, show_countdown, show_sidebar_ads, show_rating, show_ratings_comments,
-             show_trybooking_stats, is_sold_out,
+             show_trybooking_stats, trybooking_api_key, trybooking_secret_key, is_sold_out,
              sponsor_banner_image, sponsor_banner_url,
              status, publish_at, unpublish_at, created_by_admin_id, updated_by_admin_id,
              created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         [
           src.type_id,
@@ -964,6 +969,8 @@ export async function buildAdminJs() {
           src.show_rating == null ? 1 : Number(src.show_rating) ? 1 : 0,
           src.show_ratings_comments == null ? 1 : Number(src.show_ratings_comments) ? 1 : 0,
           src.show_trybooking_stats == null ? 1 : Number(src.show_trybooking_stats) ? 1 : 0,
+          src.trybooking_api_key ?? null,
+          src.trybooking_secret_key ?? null,
           src.is_sold_out == null ? 0 : Number(src.is_sold_out) ? 1 : 0,
           src.sponsor_banner_image ?? null,
           src.sponsor_banner_url ?? null,
@@ -1410,6 +1417,18 @@ export async function buildAdminJs() {
               isRequired: false,
               isVisible: { list: false, filter: false, show: true, edit: false, new: false },
               props: { label: 'Show TryBooking seats & sales' },
+            },
+            trybooking_api_key: {
+              type: 'string',
+              isRequired: false,
+              isVisible: { list: false, filter: false, show: false, edit: false, new: false },
+              props: { label: 'TryBooking API key' },
+            },
+            trybooking_secret_key: {
+              type: 'string',
+              isRequired: false,
+              isVisible: { list: false, filter: false, show: false, edit: false, new: false },
+              props: { label: 'TryBooking secret key' },
             },
             is_sold_out: {
               type: 'boolean',
