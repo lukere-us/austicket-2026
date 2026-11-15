@@ -1,9 +1,15 @@
-# AUS Ticket Lanka — Live Server Command Cheat Sheet
+# AUS Ticket Lanka — Live Server Command Cheat Sheet (Bluehost Self-Managed VPS)
 
-Quick copy-paste commands for the live server (Linux VPS, Nginx + PHP-FPM + Node + MySQL, PM2).
+Copy-paste commands for the live server: **Bluehost Self-Managed VPS, Ubuntu/Debian, no cPanel**.
+Stack: Nginx → Next.js (PM2, :3000) + AdminJS (PM2, :3001) + PHP-FPM API + MySQL/MariaDB.
 
-> **Before you start:** the values below follow `DEPLOYMENT.md` / `NAMECHEAP-DEPLOYMENT.md`.
-> If your server uses a different path, user, PHP version or PM2 name, change them **once** in section 0.
+**Server:** `hal-server-852194` · IP `50.6.55.148` · SSH `root` on port 22 · site **https://auslankatickets.com**
+**App:** `/var/www/austicket` · PM2 `austicket-web` + `austicket-admin` · DB `aus-booking` (user `austicket`) · backups `/var/backups/austicket`
+
+> Everything is done over SSH — there is no cPanel/WHM. The Bluehost Portal is only used for
+> the server IP, root password reset, reboot/console, and snapshots (section 17).
+> Paths/names follow `DEPLOYMENT.md`. If yours differ, change them **once** in section 0.
+> For your PC, see `LOCAL-SITE-COMMANDS.md`.
 
 ---
 
@@ -16,9 +22,17 @@ export DB_USER=austicket                 # MySQL user
 export BACKUP_DIR=/var/backups/austicket # where backups are stored
 export WEB_PM2=austicket-web             # PM2 name: Next.js frontend (port 3000)
 export ADMIN_PM2=austicket-admin         # PM2 name: AdminJS (port 3001)
-export PHP_FPM=php8.2-fpm                # check with: systemctl list-units | grep fpm
-mkdir -p "$BACKUP_DIR"
+
+# Auto-detect PHP-FPM (php8.1-fpm on Ubuntu 22.04, php8.3-fpm on 24.04, php8.2-fpm on Debian 12)
+export PHP_FPM=$(systemctl list-units --type=service --all --no-legend | grep -o 'php[0-9.]*-fpm' | head -1)
+# Auto-detect database service (mysql or mariadb)
+export DB_SVC=$(systemctl list-units --type=service --all --no-legend | grep -oE '(mariadb|mysql)\.service' | head -1 | sed 's/\.service//')
+echo "PHP-FPM: $PHP_FPM   DB: $DB_SVC"
+
+sudo mkdir -p "$BACKUP_DIR" && sudo chown "$USER" "$BACKUP_DIR"
 ```
+
+> Tip: put the block above at the end of `~/.bashrc` so it loads automatically on every login.
 
 **Store the DB password once** so `mysqldump`/`mysql` don't prompt (and the password never appears in shell history):
 
@@ -35,14 +49,30 @@ chmod 600 ~/.my.cnf
 
 ## 1. Connect
 
-```bash
-# From your PC (PowerShell or terminal)
-ssh root@YOUR_SERVER_IP
-# or, with a key
-ssh -i C:\Users\YOU\.ssh\id_rsa root@YOUR_SERVER_IP
+```powershell
+# From your PC (PowerShell)
+ssh root@50.6.55.148
+# with a key:
+ssh -i $HOME\.ssh\id_ed25519 root@50.6.55.148
+```
 
+Optional shortcut — add to `C:\Users\<you>\.ssh\config`, then just type `ssh austicket`:
+
+```
+Host austicket
+    HostName 50.6.55.148
+    User root
+    Port 22
+```
+
+```bash
 cd $APP_DIR
 ```
+
+> You log in as `root`, so `sudo` in the commands below is harmless (you can drop it).
+> The PM2 apps run under **root** — always run `pm2` commands as root, or they won't be listed.
+
+Locked out of SSH? Bluehost Portal → your VPS → **Console** (browser terminal), or reset the root password there.
 
 ---
 
@@ -53,7 +83,8 @@ pm2 status                         # are web + admin online?
 pm2 monit                          # live CPU / RAM per app (q to quit)
 systemctl status nginx --no-pager
 systemctl status $PHP_FPM --no-pager
-systemctl status mysql --no-pager  # or: mariadb
+systemctl status $DB_SVC --no-pager
+sudo ufw status                    # firewall: only 22, 80, 443 should be open
 df -h                              # disk space
 free -h                            # memory
 ```
@@ -63,7 +94,7 @@ Health checks:
 ```bash
 curl -s  http://127.0.0.1:3000 -o /dev/null -w "frontend %{http_code}\n"
 curl -s  http://127.0.0.1:3001/admin -o /dev/null -w "admin    %{http_code}\n"
-curl -s  https://www.YOURDOMAIN.com/api/          # should return JSON
+curl -s  https://auslankatickets.com/api/          # should return JSON
 ```
 
 ---
@@ -205,13 +236,14 @@ Add:
 ## 7. Download a backup to your PC
 
 Run these **on your PC** (Windows PowerShell has `scp` built in), not on the server.
+(Or simply `scp austicket:/var/backups/austicket/<file> .` if you set up the SSH shortcut in section 1.)
 
 ```powershell
 # Latest DB backup → into the project's "Live DB" folder
-scp root@YOUR_SERVER_IP:/var/backups/austicket/aus-booking-20261115-1030.sql.gz "E:\Xampp\htdocs\austicket-2026\Live DB\"
+scp root@50.6.55.148:/var/backups/austicket/aus-booking-20261115-1030.sql.gz "E:\Xampp\htdocs\austicket-2026\Live DB\"
 
 # Uploads archive
-scp root@YOUR_SERVER_IP:/var/backups/austicket/upload-20261115-1030.tar.gz "E:\Xampp\htdocs\austicket-2026\Live DB\"
+scp root@50.6.55.148:/var/backups/austicket/upload-20261115-1030.tar.gz "E:\Xampp\htdocs\austicket-2026\Live DB\"
 ```
 
 Find the latest file name first (on the server):
@@ -256,7 +288,7 @@ sudo chown -R www-data:www-data $APP_DIR/Upload && sudo chmod -R 775 $APP_DIR/Up
 Upload a backup from your PC to the server:
 
 ```powershell
-scp "E:\Xampp\htdocs\austicket-2026\Live DB\aus-booking-XXXX.sql.gz" root@YOUR_SERVER_IP:/var/backups/austicket/
+scp "E:\Xampp\htdocs\austicket-2026\Live DB\aus-booking-XXXX.sql.gz" root@50.6.55.148:/var/backups/austicket/
 ```
 
 ---
@@ -320,10 +352,11 @@ pm2 reload $WEB_PM2             # zero-downtime restart (frontend)
 
 sudo systemctl restart nginx
 sudo systemctl restart $PHP_FPM
-sudo systemctl restart mysql    # or mariadb
+sudo systemctl restart $DB_SVC
 
 pm2 save                        # remember current process list
-pm2 startup                     # auto-start PM2 after reboot (run once, follow printed command)
+pm2 startup systemd             # auto-start PM2 after reboot (run once, then run the sudo command it prints)
+pm2 resurrect                   # bring back saved apps manually
 ```
 
 ---
@@ -339,7 +372,9 @@ pm2 flush                                 # clear PM2 log files
 sudo tail -f /var/log/nginx/error.log
 sudo tail -f /var/log/nginx/access.log
 sudo tail -f /var/log/$PHP_FPM.log        # PHP-FPM (API) errors
-sudo tail -f /var/log/mysql/error.log
+sudo journalctl -u $DB_SVC -n 100 --no-pager   # MySQL/MariaDB
+sudo tail -f /var/log/mysql/error.log     # MySQL on Ubuntu (if present)
+sudo journalctl -u nginx -n 50 --no-pager
 ```
 
 ---
@@ -383,11 +418,13 @@ sudo journalctl --vacuum-time=7d                          # trim system logs
 pm2 flush                                                 # trim PM2 logs
 ```
 
-SSL certificate (Let's Encrypt):
+SSL certificate (Let's Encrypt, Nginx plugin):
 
 ```bash
-sudo certbot certificates          # expiry dates
-sudo certbot renew --dry-run       # test auto-renew
+sudo certbot certificates                                  # expiry dates
+sudo certbot renew --dry-run                               # test auto-renew
+sudo certbot --nginx -d auslankatickets.com -d www.auslankatickets.com   # issue / re-issue
+systemctl list-timers | grep certbot                       # auto-renew timer active?
 ```
 
 ---
@@ -398,8 +435,85 @@ sudo certbot renew --dry-run       # test auto-renew
 |---|---|
 | Site down (502) | `pm2 status` → `pm2 restart $WEB_PM2` → `pm2 logs $WEB_PM2` |
 | Admin 503 / blank custom pages | `cd admin && npm run build:bundle && pm2 restart $ADMIN_PM2` |
-| No listings on site | `curl https://www.YOURDOMAIN.com/api/` → check PHP-FPM + `api/config.php` DB details |
+| No listings on site | `curl https://auslankatickets.com/api/` → check PHP-FPM + `api/config.php` DB details |
 | Images broken | Check `NEXT_PUBLIC_UPLOADS_BASE` in `frontend/.env.local`, rebuild; check `Upload/` permissions |
 | Frontend login fails | Add domain to `CORS_ALLOW_ORIGINS` in `api/config.php`, reload PHP-FPM |
 | Seat counts wrong | `rm -rf /tmp/austicket-trybooking`; check TryBooking keys in Admin → General settings |
 | Disk full | `df -h`, then section 15 |
+| Site unreachable, SSH works | `sudo ufw status` (80/443 allowed?), `sudo nginx -t`, `sudo systemctl status nginx` |
+| SSH won't connect | Bluehost Portal → VPS → Console; check `sudo ufw allow OpenSSH` |
+| After a server reboot apps are down | `pm2 resurrect`; then run `pm2 startup` + `pm2 save` once so it's automatic |
+
+---
+
+## 17. Bluehost server tasks (Ubuntu/Debian)
+
+### 17.1 Snapshot before risky changes
+
+Bluehost Portal → Hosting → My Plans → your VPS → **Snapshots / Backups** → create a snapshot before
+OS upgrades, big deploys or migrations. (A snapshot is the whole server; sections 6–7 are just DB + images.)
+
+### 17.2 System updates
+
+```bash
+sudo apt update && sudo apt upgrade -y
+sudo apt autoremove -y
+[ -f /var/run/reboot-required ] && echo "REBOOT NEEDED"
+```
+
+Reboot safely:
+
+```bash
+pm2 save                  # make sure PM2 will restore the apps
+sudo reboot
+# after reconnecting:
+pm2 status
+```
+
+### 17.3 Firewall (ufw)
+
+```bash
+sudo ufw status verbose
+sudo ufw allow OpenSSH
+sudo ufw allow 'Nginx Full'    # 80 + 443
+sudo ufw enable
+# Never open 3000 / 3001 / 3306 — they must stay internal (Nginx proxies to them).
+```
+
+### 17.4 Nginx site config
+
+```bash
+sudo nano /etc/nginx/sites-available/austicket            # edit (see DEPLOYMENT.md §6.1)
+sudo ln -s /etc/nginx/sites-available/austicket /etc/nginx/sites-enabled/   # enable (first time)
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Upload size limit (big posters failing to upload): set `client_max_body_size 32M;` in the server block,
+and in PHP:
+
+```bash
+sudo nano /etc/php/*/fpm/php.ini      # upload_max_filesize = 32M, post_max_size = 32M
+sudo systemctl reload $PHP_FPM
+```
+
+### 17.5 Versions
+
+```bash
+lsb_release -a; node -v; npm -v; php -v; mysql --version; nginx -v; pm2 -v
+```
+
+Upgrade Node (NodeSource, e.g. Node 22) then reinstall + rebuild both apps:
+
+```bash
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt install -y nodejs
+sudo npm install -g pm2 && pm2 update
+```
+
+### 17.6 Brute-force protection
+
+```bash
+sudo apt install -y fail2ban
+sudo systemctl enable --now fail2ban
+sudo fail2ban-client status sshd
+```
